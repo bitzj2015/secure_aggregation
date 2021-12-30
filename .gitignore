@@ -4,6 +4,7 @@
 *.job
 *.sh
 data/
+data_/
 results/
 logs/
 param/
