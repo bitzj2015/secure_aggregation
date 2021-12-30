@@ -2,6 +2,8 @@
 *.bin
 *.txt
 *.job
+*.sh
+data/
 results/
 logs/
 param/
