@@ -1,0 +1,7 @@
+*.json
+*.bin
+*.txt
+*.job
+results/
+logs/
+param/
