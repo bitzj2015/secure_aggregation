@@ -52,10 +52,10 @@ def main(args):
     clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
     clientSubSet = [0] + [item + 1 for item in clientSubSet]
 
-    dataloaderByClient, testdataloader = get_dataset("mnist", batch_size, nClients, logger)
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
     
     ray.init()
-    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model) for i in range(len(clientSubSet))]
+    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
@@ -72,7 +72,7 @@ def main(args):
             global_model_param[name] += torch.mean(cur_param, axis=0)
         
         # Start iteration of MINE
-        for k in range(10):
+        for k in range(args.k):
             mine_net = Mine(input_size=grad_dim * 2).to(device)
             mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
             mine_net.train()
@@ -128,10 +128,10 @@ def main(args):
                     logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
                 mine_results[iRound][k].append((niter, mi_lb.item()))
 
-            # Update the global model
-            for name in global_model_param.keys():
-                cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
-                global_model_param[name] += torch.mean(cur_param, axis=0)
+        # Update the global model
+        for name in global_model_param.keys():
+            cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
+            global_model_param[name] += torch.mean(cur_param, axis=0)
 
     torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
     with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
@@ -147,6 +147,8 @@ parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
+parser.add_argument("--dataset", type=str, default="mnist")
+parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
 args = parser.parse_args()
 

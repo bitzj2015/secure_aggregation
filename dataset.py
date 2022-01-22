@@ -19,7 +19,7 @@ class TaskDataset(Dataset):
     def __getitem__(self, idx):
         if type(idx) == torch.Tensor:
             idx = idx.item()
-        x = self.input[idx]
+        x = self.input[idx].astype("float32")
         y = self.label[idx]
         sample = {'x': x, 'y': y}
         return sample
@@ -67,30 +67,58 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
         xtest = test_data.data / 255.0
         xtest = (xtest - 0.5) / 0.5
         ytest = test_data.targets
-        logger.info(f"Load dataset: {dataset_name}, testing data size: {xtest.shape[0]}")
+        logger.info(f"Load dataset: {dataset_name}, testing data size: {xtest.shape}")
 
-        trainDataSizeFracClients = 1 / nClients
-        trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
+    elif dataset_name == "cifar10":
+        train_data = datasets.CIFAR10(
+            root = 'data',
+            train = True,                         
+            transform = ToTensor(), 
+            download = True,            
+        )
+        test_data = datasets.CIFAR10(
+            root = 'data', 
+            train = False, 
+            transform = ToTensor()
+        )
 
-        # target_user_entropy = 0
-        # for img in train_data.data[:trainDataSizeClients]:
-        #     target_user_entropy += shannon_entropy(img, base=2)
-        # print(target_user_entropy, trainDataSizeClients)
-
-        stIndex = 0
-        dataloaderByClient = []
-        for iClient in range(nClients):
-            
-            train_dataset = TaskDataset(
-                xtrain[stIndex: stIndex + trainDataSizeClients], 
-                ytrain[stIndex: stIndex + trainDataSizeClients],
-                client_id = iClient
-            )
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            dataloaderByClient.append(train_loader)
-            stIndex = (stIndex + trainDataSizeClients)
         
-        test_dataset = TaskDataset(xtest, ytest)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-        return dataloaderByClient, test_loader
+        xtrain = train_data.data / 255.0
+        xtrain = (xtrain - 0.5) / 0.5
+        ytrain = train_data.targets
+        trainDataSize = xtrain.shape[0]
+        logger.info(f"Load dataset: {dataset_name}, training data size: {trainDataSize}")
+
+        xtest = test_data.data / 255.0
+        xtest = (xtest - 0.5) / 0.5
+        ytest = test_data.targets
+        logger.info(f"Load dataset: {dataset_name}, testing data size: {xtest.shape}")
+
+
+
+    trainDataSizeFracClients = 1 / nClients
+    trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
+
+    # target_user_entropy = 0
+    # for img in train_data.data[:trainDataSizeClients]:
+    #     target_user_entropy += shannon_entropy(img, base=2)
+    # print(target_user_entropy, trainDataSizeClients)
+
+    stIndex = 0
+    dataloaderByClient = []
+    for iClient in range(nClients):
+        
+        train_dataset = TaskDataset(
+            xtrain[stIndex: stIndex + trainDataSizeClients], 
+            ytrain[stIndex: stIndex + trainDataSizeClients],
+            client_id = iClient
+        )
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        dataloaderByClient.append(train_loader)
+        stIndex = (stIndex + trainDataSizeClients)
+    
+    test_dataset = TaskDataset(xtest, ytest)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    return dataloaderByClient, test_loader
