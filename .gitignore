@@ -7,3 +7,5 @@ data/
 results/
 logs/
 param/
+tmp/
+dataset/

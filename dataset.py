@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 import numpy as np
+from skimage.measure.entropy import shannon_entropy
 
 
 class TaskDataset(Dataset):
@@ -54,12 +55,14 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
             train = False, 
             transform = ToTensor()
         )
+
+        
+
         xtrain = train_data.data / 255.0
         xtrain = (xtrain - 0.5) / 0.5
         ytrain = train_data.targets
         trainDataSize = xtrain.shape[0]
         logger.info(f"Load dataset: {dataset_name}, training data size: {trainDataSize}")
-
 
         xtest = test_data.data / 255.0
         xtest = (xtest - 0.5) / 0.5
@@ -68,6 +71,11 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
 
         trainDataSizeFracClients = 1 / nClients
         trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
+
+        # target_user_entropy = 0
+        # for img in train_data.data[:trainDataSizeClients]:
+        #     target_user_entropy += shannon_entropy(img, base=2)
+        # print(target_user_entropy, trainDataSizeClients)
 
         stIndex = 0
         dataloaderByClient = []
@@ -86,5 +94,3 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
         return dataloaderByClient, test_loader
-            
-

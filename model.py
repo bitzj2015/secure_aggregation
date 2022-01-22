@@ -14,6 +14,20 @@ class LinearModel(torch.nn.Module):
         x = self.fc1(x)
         return x
 
+class NonLinearModel(torch.nn.Module):
+
+    def __init__(self):
+        super(NonLinearModel, self).__init__()
+        self.fc1 = torch.nn.Linear(784, 10)
+        torch.nn.init.uniform_(self.fc1.weight, a=0.0, b=0.01)
+        torch.nn.init.constant_(self.fc1.bias, 10.0)
+        self.sigmoid = torch.nn.ReLU()
+
+    def forward(self, x):
+        x = x.view(-1, 28*28)
+        x = self.sigmoid(self.fc1(x))
+        return x
+
 class FCNNModel(torch.nn.Module):
     def __init__(self):
         super(FCNNModel, self).__init__()
@@ -39,6 +53,9 @@ class Worker(object):
         elif model_name == "linear":
             self.local_model = LinearModel()
             self.grad_dim = 7850
+        elif model_name == "nlinear":
+            self.local_model = NonLinearModel()
+            self.grad_dim = 7850
         else:
             self.local_model = None
             self.grad_dim = 0
@@ -59,6 +76,7 @@ class Worker(object):
             loss = self.local_loss(outputs, y)
             loss.backward()
             self.local_optimizer.step()
+            # break
         return
     
     def pull_global_model(self, global_model_param):

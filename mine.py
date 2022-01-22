@@ -37,7 +37,6 @@ def learn_mine(batch, device, mine_net, mine_net_optim, ma_et, ma_rate=0.05):
     
     # unbiasing use moving average
     loss = -(torch.mean(t) - (1/ma_et.mean()).detach()*torch.mean(et))
-    print(loss)
     # use biased estimator
 #     loss = - mi_lb
     
