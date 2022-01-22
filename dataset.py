@@ -19,7 +19,7 @@ class TaskDataset(Dataset):
     def __getitem__(self, idx):
         if type(idx) == torch.Tensor:
             idx = idx.item()
-        x = self.input[idx].astype("float32")
+        x = self.input[idx]
         y = self.label[idx]
         sample = {'x': x, 'y': y}
         return sample
@@ -84,18 +84,16 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
 
         
 
-        xtrain = train_data.data / 255.0
+        xtrain = torch.from_numpy(train_data.data.astype("float32")) / 255.0
         xtrain = (xtrain - 0.5) / 0.5
         ytrain = train_data.targets
         trainDataSize = xtrain.shape[0]
         logger.info(f"Load dataset: {dataset_name}, training data size: {trainDataSize}")
 
-        xtest = test_data.data / 255.0
+        xtest = torch.from_numpy(test_data.data.astype("float32")) / 255.0
         xtest = (xtest - 0.5) / 0.5
         ytest = test_data.targets
         logger.info(f"Load dataset: {dataset_name}, testing data size: {xtest.shape}")
-
-
 
     trainDataSizeFracClients = 1 / nClients
     trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
