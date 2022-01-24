@@ -20,6 +20,7 @@ class TaskDataset(Dataset):
         if type(idx) == torch.Tensor:
             idx = idx.item()
         x = self.input[idx]
+        x = x.reshape(x.size(0), x.size(1), -1).permute(2, 0, 1)
         y = self.label[idx]
         sample = {'x': x, 'y': y}
         return sample
@@ -98,11 +99,6 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
     trainDataSizeFracClients = 1 / nClients
     trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
 
-    # target_user_entropy = 0
-    # for img in train_data.data[:trainDataSizeClients]:
-    #     target_user_entropy += shannon_entropy(img, base=2)
-    # print(target_user_entropy, trainDataSizeClients)
-
     stIndex = 0
     dataloaderByClient = []
     for iClient in range(nClients):
@@ -120,3 +116,24 @@ def get_dataset(dataset_name, batch_size, nClients, logger):
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return dataloaderByClient, test_loader
+
+
+
+# train_data = datasets.CIFAR10(
+#     root = 'data',
+#     train = True,                         
+#     transform = ToTensor(), 
+#     download = True,            
+# )
+# test_data = datasets.CIFAR10(
+#     root = 'data', 
+#     train = False, 
+#     transform = ToTensor()
+# )
+
+
+# target_user_entropy = 0
+# for img in train_data.data[:1200]:
+#     for k in range(img.shape[-1]):
+#         target_user_entropy += shannon_entropy(img[:,:,k], base=2)
+# print(target_user_entropy, 1200)

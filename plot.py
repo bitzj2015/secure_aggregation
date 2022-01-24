@@ -1,12 +1,12 @@
 import json
-from locale import normalize
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-from scipy.stats import gmean
 
-model = "lin"
-version = "avg_sgd"
+model = "nlin"
+version = "avg_cifar10"
+entropy = 25088 
+# entropy = 1924
 
 for tag in ["", "_small"]:
     if tag == "":
@@ -38,9 +38,9 @@ for tag in ["", "_small"]:
                 except:
                     continue
                 if use_norm == "low":
-                    avg_max_MI_by_round.append(np.mean(max_MI_by_round) / 1924 * 100)
-                    avg_max_MI_by_round_low.append(sorted(max_MI_by_round)[0] / 1924 * 100)
-                    avg_max_MI_by_round_high.append(sorted(max_MI_by_round)[-1] / 1924 * 100)
+                    avg_max_MI_by_round.append(np.mean(max_MI_by_round) / entropy * 100)
+                    avg_max_MI_by_round_low.append(sorted(max_MI_by_round)[0] / entropy * 100)
+                    avg_max_MI_by_round_high.append(sorted(max_MI_by_round)[-1] / entropy * 100)
                 elif use_norm == "high":
                     avg_max_MI_by_round.append(np.mean(max_MI_by_round) / 1200)
                     avg_max_MI_by_round_low.append(sorted(max_MI_by_round)[0] / 1200)
