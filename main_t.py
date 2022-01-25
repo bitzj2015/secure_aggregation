@@ -49,7 +49,7 @@ def main(args):
 
     num_iter = 1000
     num_samples = args.num_sample
-    dataloaderByClient, testdataloader = get_dataset("mnist", batch_size, nClients, logger)
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
     np.random.seed(1)
     ray.init()
 
@@ -67,10 +67,10 @@ def main(args):
                 clientSubSet = np.random.choice(nClients, subset, replace=True)
                 # clientSubSet = [0] + [item + 1 for item in clientSubSet]
                 
-                workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model) for i in range(len(clientSubSet))]
+                workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
                 global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
                 # grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
-                print(clientSubSet[0])
+                # print(clientSubSet[0])
                 sample_individual_grad_concatenated = []
                 sample_grad_aggregate_concatenated = []
                 xdata.append(dataloaderByClient[clientSubSet[0]].dataset.input.cpu().numpy().reshape(-1))
@@ -121,7 +121,7 @@ def main(args):
             Y1 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_individual_grad_concatenated])
             Y2 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_grad_aggregate_concatenated])
 
-            hf = h5py.File(f"./dataset/grad_data_{subset}_{k}_sgd.hdf5", "w")
+            hf = h5py.File(f"./dataset/grad_data_{subset}_{k}_{args.dataset}.hdf5", "w")
             hf.create_dataset('xdata', data=X)
             hf.create_dataset('ygrad1', data=Y1)
             hf.create_dataset('ygrad2', data=Y2)
@@ -130,22 +130,24 @@ def main(args):
         mine_results = {}
         for k in range(10):
             mine_results[k] = {}
-            hf = h5py.File(f"./dataset/grad_data_{k}.hdf5", "r")
+            hf = h5py.File(f"./dataset/grad_data_{subset}_{k}_{args.dataset}.hdf5", "r")
             X = np.array(hf["xdata"][:])
             X_all = list(np.array(hf["ygrad1"][:]))
-            Y_all = list(np.array(hf["ygrad2"][:]))
+            Y_all = list(np.array(hf["xdata"][:]))
             print(X.shape, len(Y_all[0]))
 
-            for iRound in [1, 5, 10, 20, 30]:
+            for iRound in [1]: # [1, 5, 10, 20, 30]:
                 mine_results[k][iRound] = []
                 # Train MINE network
                 # X = np.array([np.array(grad[:iRound * 7850]).reshape(-1) for grad in X_all]) * 1000
 
-                Y = np.array([np.array(grad[:iRound * 7850]).reshape(-1) for grad in Y_all]) * 1000
+                # Y = np.array([np.array(grad[:iRound * 7850]).reshape(-1) for grad in Y_all]) * 1000
+                Y = np.array([np.array(grad).reshape(-1) for grad in Y_all])
 
                 joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
                 random.shuffle(Y_all)
-                Y_ = np.array([np.array(grad[:iRound * 7850]).reshape(-1) for grad in Y_all])
+                # Y_ = np.array([np.array(grad[:iRound * 7850]).reshape(-1) for grad in Y_all])
+                Y_ = np.array([np.array(grad).reshape(-1) for grad in Y_all])
 
                 margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
 
@@ -176,10 +178,11 @@ parser.add_argument("--subset", type=int, default=20)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
-parser.add_argument("--trainTotalRounds", type=int, default=30)
+parser.add_argument("--trainTotalRounds", type=int, default=0)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
+parser.add_argument("--dataset", type=str, default="mnist")
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument('--resample', dest="resample", default=False, action='store_true')
 args = parser.parse_args()

@@ -144,7 +144,7 @@ class Worker(object):
         elif model_name == "nlinear":
             self.local_model = NonLinearModel(dataset_name)
         else:
-            self.local_model = AlexNet()
+            self.local_model = AlexNet(dataset_name)
         
         self.grad_dim = sum(p.numel() for p in self.local_model.parameters())
         self.local_loss = torch.nn.CrossEntropyLoss()
