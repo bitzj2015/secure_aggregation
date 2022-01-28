@@ -132,8 +132,9 @@ def main(args):
             mine_results[k] = {}
             hf = h5py.File(f"./dataset/grad_data_{subset}_{k}_{args.dataset}.hdf5", "r")
             X = np.array(hf["xdata"][:])
-            X_all = list(np.array(hf["ygrad1"][:]))
-            Y_all = list(np.array(hf["xdata"][:]))
+            X = X.reshape(X.shape[0] * 1000, -1)
+            # X_all = list(np.array(hf["ygrad1"][:]))
+            Y_all = list(X)
             print(X.shape, len(Y_all[0]))
 
             for iRound in [1]: # [1, 5, 10, 20, 30]:
@@ -178,7 +179,7 @@ parser.add_argument("--subset", type=int, default=20)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
-parser.add_argument("--trainTotalRounds", type=int, default=0)
+parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")

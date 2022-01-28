@@ -54,8 +54,8 @@ class FCNNModel(torch.nn.Module):
             self.classifier = torch.nn.Sequential(
                 torch.nn.Linear(28*28, 100),
                 torch.nn.ReLU(),
-                # torch.nn.Linear(100, 100),
-                # torch.nn.ReLU(),
+                torch.nn.Linear(100, 100),
+                torch.nn.ReLU(),
                 torch.nn.Linear(100, 10),
             )
             self.grad_dim = 89610
