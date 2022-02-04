@@ -10,12 +10,13 @@ version = "bs"
 tag = ""
 
 # entropy = 1403 * 1000 # 25088 
-entropy = 567 * 32 # 1924
+entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
 d = 7850
 num = 1
+fig_location = "figs_0130_raw"
 
 user_list = [2,5,10,20,50]
 
@@ -73,7 +74,7 @@ for use_norm in ["low", "high"]:
         ax.set_ylabel("Estimated MI divided by entropy (%)")
     elif use_norm == "high":
         ax.set_ylabel("Estimated MI (bits)")
-    fig.savefig(f"./results/figs_new/results_cmp_bs_{version}_{use_norm}_avg{tag}.jpg")
+    fig.savefig(f"./results/{fig_location}/results_cmp_bs_{version}_{use_norm}_avg{tag}.jpg")
 
 for use_norm in ["low", "high"]:
     fig, ax = plt.subplots()
@@ -130,4 +131,4 @@ for use_norm in ["low", "high"]:
         ax.set_ylabel("Estimated MI divided by entropy (%)")
     elif use_norm == "high":
         ax.set_ylabel("Estimated MI (bits)")
-    fig.savefig(f"./results/figs_new/results_cmp_n_bs_{version}_{use_norm}_avg{tag}.jpg")
+    fig.savefig(f"./results/{fig_location}/results_cmp_n_bs_{version}_{use_norm}_avg{tag}.jpg")

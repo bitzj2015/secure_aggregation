@@ -3,23 +3,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-model = "lin"
-version = "avg_sgd"
-# entropy = 1403 * 1000 # 25088 
-entropy = 567 * 32 # 1924
+model = "nlin"
+version = "avg_cifar10"
+entropy = 1403 * 32 # 25088 
+# entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
-d = 89610 
+d = 82554
+# d = 89610 
 # d = 7850
+d = 30730
 num = 1
+fig_location = "figs_new_cifar"
 
-for tag in ["_large"]:
+for tag in ["", "_small"]:
     if tag == "":
         user_list = [1,2,5,10,20,50]
         baseline_raw = [entropy] + [d / 2 * np.log(n / (n-1)) for n in user_list[1:]]
     else:
-        user_list = [1000]
+        user_list = [2,5,10,20,50]
         baseline_raw = [d / 2 * np.log(n / (n-1)) for n in user_list]
 
     for use_norm in ["low", "high"]:
@@ -72,7 +75,7 @@ for tag in ["_large"]:
             res[1][num_user] = np.mean(all_max_MI_by_round) - z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
             res[2][num_user] = np.mean(all_max_MI_by_round) + z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
 
-
+        print(res)
         if tag == "":
             ax.legend(["1 user"] + [f"{num_user} users" for num_user in user_list])
         else:
@@ -86,12 +89,11 @@ for tag in ["_large"]:
             ax.set_ylabel("Estimated MI (bits)")
             baseline = [item / num for item in baseline_raw]
 
-        fig.savefig(f"./results/figs_new/results_{model}_{version}_{use_norm}{tag}.jpg")
+        fig.savefig(f"./results/{fig_location}/results_{model}_{version}_{use_norm}{tag}.jpg")
 
 
         fig, ax = plt.subplots()
         ax.plot(list(res[0].keys()), list(res[0].values()), "*-")
-        # if tag == "":
         ax.plot(user_list[-len(baseline):], baseline, "*--")
         ax.set_ylim([0,1.2 * np.max(list(res[0].values()))])
         ax.legend(["Estimated MI", "d/2*log(N/(N-1))"])
@@ -104,4 +106,4 @@ for tag in ["_large"]:
             ax.set_ylabel("Estimated MI divided by entropy (%)")
         elif use_norm == "high":
             ax.set_ylabel("Estimated MI (bits)")
-        fig.savefig(f"./results/figs_new/results_{model}_{version}_{use_norm}_avg{tag}.jpg")
+        fig.savefig(f"./results/{fig_location}/results_{model}_{version}_{use_norm}_avg{tag}.jpg")

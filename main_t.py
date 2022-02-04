@@ -86,8 +86,9 @@ def main(args):
                         global_model_param[name] += torch.mean(cur_param, axis=0)
                     
                     local_model_updates = []
-                    for _ in range(num_jobs):
+                    for m in range(num_jobs):
                         # Get the global model
+                        
                         ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
 
                         # Run local training epochs
@@ -176,7 +177,7 @@ def main(args):
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=20)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
 parser.add_argument("--trainTotalRounds", type=int, default=30)

@@ -2,16 +2,16 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-num_user = 50
+num_user = 20
 # entropy = 1403 * 1000 # 25088 
-entropy = 567 * 32 # 1924
+entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
 
 
-version = "lin_1000_avg_t"
-with open(f"./results/lin/loss_{num_user}_{version}.json", "r") as json_file:
+version = "lin_20_avg_t"
+with open(f"./results/loss_{num_user}_{version}.json", "r") as json_file:
     data = json.load(json_file)
 
 for use_norm in ["low", "high"]:

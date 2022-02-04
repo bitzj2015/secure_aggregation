@@ -5,16 +5,17 @@ import numpy as np
 import math
 from scipy.stats import gmean
 
-version = "avg"
-# entropy = 1403 * 1000 # 25088 
-entropy = 567 * 32 # 1924
+version = "avg_cifar10"
+entropy = 1403 * 32 # 25088 
+# entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
 d = 7850
 num = 1
+fig_location = "figs_new_cifar"
 
-for tag in ["", "_small"]:
+for tag in [""]:
     if tag == "":
         user_list = [1,2,5,10,20,50]
         baseline_raw = [entropy] + [d / 2 * np.log(n / (n-1)) for n in [2,5,10,20,50]]
@@ -25,7 +26,7 @@ for tag in ["", "_small"]:
     for use_norm in ["low", "high"]:
         fig, ax = plt.subplots()
 
-        for model in ["lin", "nlin", "nn", "cnn"]:
+        for model in ["lin", "nlin", "cnn"]:
             res = [{} for _ in range(3)]
             for num_user in user_list:
                 with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}.json", "r") as json_file:
@@ -72,9 +73,11 @@ for tag in ["", "_small"]:
             ax.plot(list(res[0].keys()), list(res[0].values()), "*-")
             ax.fill_between(user_list, list(res[1].values()), list(res[2].values()), alpha=.1)
         ax.set_xlabel("Number of users")
-        ax.legend(["linear, d=7890", "fcnn, d=7890", "fcnn, d=89610", "cnn, d=77786"])
+        # ax.legend(["linear, d=7890", "fcnn, d=7890", "fcnn, d=89610", "cnn, d=77786"])
+        # ax.legend(["linear, d=7890", "fcnn, d=7890", "fcnn, d=89610"])
+        ax.legend(["linear, d=30730", "fcnn, d=30730", "cnn, d=82554"])
         if use_norm == "low":
             ax.set_ylabel("Estimated MI divided by entropy (%)")
         elif use_norm == "high":
             ax.set_ylabel("Estimated MI (bits)")
-        fig.savefig(f"./results/figs_new/results_cmp_{version}_{use_norm}_avg{tag}.jpg")
+        fig.savefig(f"./results/{fig_location}/results_cmp_{version}_{use_norm}_avg{tag}.jpg")

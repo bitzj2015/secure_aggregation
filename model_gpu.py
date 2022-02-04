@@ -137,15 +137,16 @@ class AlexNet(nn.Module):
 
 @ray.remote
 class Worker(object):
-    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist"):
+    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu"):
+        self.device = device
         if model_name == "fcnn":
-            self.local_model = FCNNModel(dataset_name)
+            self.local_model = FCNNModel(dataset_name).to(self.device)
         elif model_name == "linear":
-            self.local_model = LinearModel(dataset_name)
+            self.local_model = LinearModel(dataset_name).to(self.device)
         elif model_name == "nlinear":
-            self.local_model = NonLinearModel(dataset_name)
+            self.local_model = NonLinearModel(dataset_name).to(self.device)
         else:
-            self.local_model = AlexNet(dataset_name)
+            self.local_model = AlexNet(dataset_name).to(self.device)
         
         self.grad_dim = sum(p.numel() for p in self.local_model.parameters())
         print(self.grad_dim)
@@ -160,7 +161,7 @@ class Worker(object):
     def run_train_epoch(self):
         self.local_model.train()
         for k, batch in enumerate(self.local_dataloader):
-            x, y = batch["x"], batch["y"]
+            x, y = batch["x"].to(self.device), batch["y"].to(self.device)
             self.local_optimizer.zero_grad()
             outputs = self.local_model(x)
             loss = self.local_loss(outputs, y)
@@ -194,7 +195,7 @@ class Worker(object):
         count = 0
         acc = 0
         for _, batch in enumerate(testdataloader):
-            x, y = batch["x"], batch["y"]
+            x, y = batch["x"].to(self.device), batch["y"].to(self.device)
             outputs = self.local_model(x)
             _, predicted_val = torch.max(outputs.data, 1)
             count += y.size(0)

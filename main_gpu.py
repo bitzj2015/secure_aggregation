@@ -5,7 +5,7 @@ from tqdm import tqdm
 import json
 import argparse
 from mine import *
-from model import *
+from model_gpu import *
 from dataset import *
 import ray
 import logging
@@ -54,8 +54,8 @@ def main(args):
 
     dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
     
-    ray.init(num_gpus=1,num_cpus=0)
-    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
+    ray.init(num_gpus=1,num_cpus=1)
+    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
