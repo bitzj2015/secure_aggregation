@@ -54,7 +54,7 @@ def main(args):
 
     dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
     
-    ray.init(num_gpus=1,num_cpus=1)
+    ray.init(num_gpus=1)
     workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
@@ -72,15 +72,16 @@ def main(args):
             global_model_param[name] += torch.mean(cur_param, axis=0)
         
         # Start iteration of MINE
-        for k in range(args.k):
-            mine_net = Mine(input_size=grad_dim * 2).to(device)
-            mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
-            mine_net.train()
-            mine_results[iRound][k] = []
+        # for k in range(args.k):
+        for _ in range(1):
+            # mine_net = Mine(input_size=grad_dim * 2).to(device)
+            # mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
+            # mine_net.train()
+            # mine_results[iRound][k] = []
             sample_individual_grad_concatenated = []
             sample_grad_aggregate_concatenated = []
             local_model_updates = []
-            for _ in tqdm(range(num_samples)):
+            for _ in range(num_samples):
                 local_model_updates = []
                 for _ in range(num_jobs):
                     # Get the global model
@@ -107,26 +108,31 @@ def main(args):
 
 
 
-            # # Train MINE network
-            # X = np.array(sample_individual_grad_concatenated)
-            # Y = np.array(sample_grad_aggregate_concatenated)
-            # joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
-            # random.shuffle(sample_grad_aggregate_concatenated)
-            # Y_ = np.array(sample_grad_aggregate_concatenated)
-            # margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
-            # mine_dataset = MINEDataset(joint, margin)
-            # mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
-            
-            
-            # for niter in range(num_iter):
-            #     mi_lb_sum = 0
-            #     ma_et = 1
-            #     for i, batch in enumerate(mine_traindataloader):
-            #         mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
-            #         mi_lb_sum += mi_lb
-            #     if niter % 10 == 0:
-            #         logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
-            #     mine_results[iRound][k].append((niter, mi_lb.item()))
+            # Train MINE network
+            X = np.array(sample_individual_grad_concatenated)
+            Y = np.array(sample_grad_aggregate_concatenated)
+            joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
+            for k in range(args.k):
+                mine_net = Mine(input_size=grad_dim * 2).to(device)
+                mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
+                mine_net.train()
+                mine_results[iRound][k] = []
+                random.shuffle(sample_grad_aggregate_concatenated)
+                Y_ = np.array(sample_grad_aggregate_concatenated)
+                margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
+                mine_dataset = MINEDataset(joint, margin)
+                mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
+                
+                
+                for niter in range(num_iter):
+                    mi_lb_sum = 0
+                    ma_et = 1
+                    for i, batch in enumerate(mine_traindataloader):
+                        mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
+                        mi_lb_sum += mi_lb
+                    if niter % 10 == 0:
+                        logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
+                    mine_results[iRound][k].append((niter, mi_lb.item()))
 
         # Update the global model
         for name in global_model_param.keys():
@@ -134,22 +140,22 @@ def main(args):
             global_model_param[name] += torch.mean(cur_param, axis=0)
             # print(global_model_param[name])
 
-    # torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
-    # with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
-    #     json.dump(mine_results, json_file)
+    torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
+    with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
+        json.dump(mine_results, json_file)
         
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
-parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=1)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=1)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
+parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
-parser.add_argument("--nEpochs", type=int, default=1)
+parser.add_argument("--nEpochs", type=int, default=10)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
-parser.add_argument("--k", type=int, default=1)
+parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
 args = parser.parse_args()
 

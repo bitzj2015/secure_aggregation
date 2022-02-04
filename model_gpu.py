@@ -135,7 +135,7 @@ class AlexNet(nn.Module):
         xb = self.network(xb)
         return self.fc(xb)
 
-@ray.remote
+@ray.remote(num_gpus=0.02)
 class Worker(object):
     def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu"):
         self.device = device
