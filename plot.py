@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-model = "nlin"
-version = "avg_cifar10"
+model = "cnn"
+version = "avg_niid_cifar10"
 entropy = 1403 * 32 # 25088 
 # entropy = 567 * 1200 # 1924
 
@@ -17,12 +17,12 @@ d = 30730
 num = 1
 fig_location = "figs_new_cifar"
 
-for tag in ["", "_small"]:
+for tag in ["_small"]:
     if tag == "":
-        user_list = [1,2,5,10,20,50]
+        user_list = [1,2,5,10,20]
         baseline_raw = [entropy] + [d / 2 * np.log(n / (n-1)) for n in user_list[1:]]
     else:
-        user_list = [2,5,10,20,50]
+        user_list = [2,5,10,20]
         baseline_raw = [d / 2 * np.log(n / (n-1)) for n in user_list]
 
     for use_norm in ["low", "high"]:

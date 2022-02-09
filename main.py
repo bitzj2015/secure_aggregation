@@ -6,6 +6,7 @@ import json
 import argparse
 from mine import *
 from model import *
+from worker import *
 from dataset import *
 import ray
 import logging
@@ -52,7 +53,7 @@ def main(args):
     clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
     clientSubSet = [0] + [item + 1 for item in clientSubSet]
 
-    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling)
     
     ray.init()
     workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
@@ -107,26 +108,26 @@ def main(args):
 
 
 
-            # Train MINE network
-            X = np.array(sample_individual_grad_concatenated)
-            Y = np.array(sample_grad_aggregate_concatenated)
-            joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
-            random.shuffle(sample_grad_aggregate_concatenated)
-            Y_ = np.array(sample_grad_aggregate_concatenated)
-            margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
-            mine_dataset = MINEDataset(joint, margin)
-            mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
+            # # Train MINE network
+            # X = np.array(sample_individual_grad_concatenated)
+            # Y = np.array(sample_grad_aggregate_concatenated)
+            # joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
+            # random.shuffle(sample_grad_aggregate_concatenated)
+            # Y_ = np.array(sample_grad_aggregate_concatenated)
+            # margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
+            # mine_dataset = MINEDataset(joint, margin)
+            # mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
             
             
-            for niter in range(num_iter):
-                mi_lb_sum = 0
-                ma_et = 1
-                for i, batch in enumerate(mine_traindataloader):
-                    mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
-                    mi_lb_sum += mi_lb
-                if niter % 10 == 0:
-                    logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
-                mine_results[iRound][k].append((niter, mi_lb.item()))
+            # for niter in range(num_iter):
+            #     mi_lb_sum = 0
+            #     ma_et = 1
+            #     for i, batch in enumerate(mine_traindataloader):
+            #         mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
+            #         mi_lb_sum += mi_lb
+            #     if niter % 10 == 0:
+            #         logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
+            #     mine_results[iRound][k].append((niter, mi_lb.item()))
 
         # Update the global model
         for name in global_model_param.keys():
@@ -142,8 +143,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
-parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
+parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=1)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=1)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
@@ -151,6 +152,7 @@ parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
 parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--sampling", type=str, default="iid")
 args = parser.parse_args()
 
 main(args=args)

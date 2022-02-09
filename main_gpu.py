@@ -6,6 +6,7 @@ import json
 import argparse
 from mine import *
 from model_gpu import *
+from worker import *
 from dataset import *
 import ray
 import logging

@@ -5,22 +5,23 @@ import numpy as np
 import math
 from scipy.stats import gmean
 
-model = "nn"
+model = "cnn"
 version = "avg"
-# entropy = 1403 * 1000 # 25088 
-entropy = 567 * 1200 # 1924
+dataset = "_cifar10"
+entropy = 1403 * 32 # 25088 
+# entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
 d = 7850
 num = 1
-fig_location = "figs_0130_raw"
+fig_location = "figs_new_cifar"
 
-for tag in ["", "_small"]:
+for tag in ["_small"]:
     if tag == "":
         user_list = [1,2,5,10,20,50]
     else:
-        user_list = [2,5,10,20,50]
+        user_list = [2,5,10,20]
 
     for use_norm in ["low", "high"]:
         fig, ax = plt.subplots()
@@ -28,9 +29,12 @@ for tag in ["", "_small"]:
         for ep in [1,2,5,10]:
             res = [{} for _ in range(3)]
             for num_user in user_list:
-                with open(f"./results/{model}/loss_{num_user}_nn_{num_user}_{version}_{ep}.json", "r") as json_file:
-                    data = json.load(json_file)
-                
+                if ep > 1:
+                    with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{ep}{dataset}.json", "r") as json_file:
+                        data = json.load(json_file)
+                else:
+                    with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}{dataset}.json", "r") as json_file:
+                        data = json.load(json_file)
                 avg_max_MI_by_round = []
                 avg_max_MI_by_round_low = []
                 avg_max_MI_by_round_high = []
