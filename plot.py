@@ -4,8 +4,8 @@ import numpy as np
 import math
 
 model = "cnn"
-version = "avg_niid_cifar10"
-entropy = 1403 * 32 # 25088 
+version = "avg_niid_1_cifar10"
+entropy = 1403 * 1000 # 25088 
 # entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}

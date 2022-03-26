@@ -2,6 +2,7 @@ from model import *
 import ray
 import torch
 import torchvision
+from copy import deepcopy
 
 
 @ray.remote
@@ -21,28 +22,39 @@ class Worker(object):
         # print(self.grad_dim)
         self.local_loss = torch.nn.CrossEntropyLoss()
         self.local_optimizer = torch.optim.SGD(self.local_model.parameters(), lr=lr, momentum=0.9)
+        self.global_optim_state = {'optimizer_state_dict': deepcopy(self.local_optimizer.state_dict()), 'model_state_dict': deepcopy(self.local_model.state_dict())}
         self.lr = lr
         self.local_dataloader = local_dataloader
     
     def get_grad_dim(self):
         return int(self.grad_dim)
 
-    def run_train_epoch(self):
+    def run_train_epoch(self, ep=1, update_global_state=False, use_sgd=False):
         self.local_model.train()
-        for k, batch in enumerate(self.local_dataloader):
-            x, y = batch["x"].to(self.device), batch["y"].to(self.device)
-            self.local_optimizer.zero_grad()
-            outputs = self.local_model(x)
-            loss = self.local_loss(outputs, y)
-            loss.backward()
-            self.local_optimizer.step()
-            # break
+        self.local_optimizer.load_state_dict(self.global_optim_state['optimizer_state_dict'])
+        self.local_model.load_state_dict(self.global_optim_state['model_state_dict'])
+        # print(self.local_model.state_dict()["network.5.running_var"])
+        for _ in range(ep):
+            for k, batch in enumerate(self.local_dataloader):
+                x, y = batch["x"].to(self.device), batch["y"].to(self.device)
+                self.local_optimizer.zero_grad()
+                outputs = self.local_model(x)
+                loss = self.local_loss(outputs, y)
+                loss.backward()
+                self.local_optimizer.step()
+                # print(k)
+                if use_sgd:
+                    break
+        if update_global_state:
+            self.global_optim_state['optimizer_state_dict'] = deepcopy(self.local_optimizer.state_dict())
+            # self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
         return
     
     def pull_global_model(self, global_model_param):
         with torch.no_grad():
             for name, param in self.local_model.named_parameters():
                 param.data = global_model_param[name].clone().detach()
+        self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
         return
 
     def push_local_model_updates(self, old_global_model_param):
@@ -70,6 +82,7 @@ class Worker(object):
             count += y.size(0)
             correct = (predicted_val == y).sum().item()
             acc += correct
+        # print(outputs[0],y)
         return acc / count
 
     def random_transform(self, img):
@@ -103,9 +116,9 @@ class Worker(object):
         cov_mat = grad_sample_set.t().matmul(grad_sample_set) / (grad_sample_set.size(0) - 1)
         print(f"Covariance mat has size: {cov_mat.size()}")
 
-        # Get the eigenvalues of covariance matrix
-        _, s, _ = torch.svd(cov_mat)
-        print(s[0:5])
+        # # Get the eigenvalues of covariance matrix
+        # _, s, _ = torch.svd(cov_mat)
+        # print(s[0:5])
 
-        return torch.min(s).item()
+        return 0 , cov_mat #torch.min(s).item()
 

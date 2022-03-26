@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torchvision
+import ray
 
 class LinearModel(torch.nn.Module):
 
@@ -39,7 +40,7 @@ class NonLinearModel(torch.nn.Module):
         torch.nn.init.uniform_(self.fc1.weight, a=0.0, b=0.01)
         # torch.nn.init.constant_(self.fc1.bias, 10.0)
         torch.nn.init.uniform_(self.fc1.bias, a=0.0, b=0.01)
-        self.sigmoid = torch.nn.Sigmoid()
+        self.sigmoid = torch.nn.ReLU()
 
     def forward(self, x):
         x = x.view(x.size(0), -1)

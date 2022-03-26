@@ -6,12 +6,12 @@ import json
 import argparse
 from mine import *
 from model_gpu import *
-from worker import *
 from dataset import *
 import ray
 import logging
 import subprocess
 from copy import deepcopy
+torch.manual_seed(0)
 
 subprocess.run(["mkdir", "-p", "logs"])
 subprocess.run(["mkdir", "-p", "param"])
@@ -53,9 +53,9 @@ def main(args):
     clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
     clientSubSet = [0] + [item + 1 for item in clientSubSet]
 
-    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling, alpha=args.alpha)
     
-    ray.init(num_gpus=1)
+    ray.init(num_gpus=1) #, device=device
     workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
@@ -72,25 +72,22 @@ def main(args):
             cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
             global_model_param[name] += torch.mean(cur_param, axis=0)
         
-        # Start iteration of MINE
-        # for k in range(args.k):
-        for _ in range(1):
-            # mine_net = Mine(input_size=grad_dim * 2).to(device)
-            # mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
-            # mine_net.train()
-            # mine_results[iRound][k] = []
+        if iRound % 1 == 0:
+            # Start iteration of MINE
             sample_individual_grad_concatenated = []
             sample_grad_aggregate_concatenated = []
             local_model_updates = []
-            for _ in range(num_samples):
+            for m in tqdm(range(num_samples)):
                 local_model_updates = []
                 for _ in range(num_jobs):
                     # Get the global model
-                    ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
-
-                    # Run local training epochs
-                    for _ in range(nEpochs):
-                        ray.get([worker.run_train_epoch.remote() for worker in workerByClient])
+                    # ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
+                    if m == num_samples - 1:
+                        # Run local training epochs
+                        ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True) for worker in workerByClient])
+                    else:
+                        # Run local training epochs
+                        ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=False) for worker in workerByClient])
 
                     # Get local model updates
                     tmp_local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
@@ -107,12 +104,11 @@ def main(args):
                 sample_individual_grad_concatenated.append(individual_grad_concatenated)
                 sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated)
 
-
-
             # Train MINE network
             X = np.array(sample_individual_grad_concatenated)
             Y = np.array(sample_grad_aggregate_concatenated)
             joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
+            
             for k in range(args.k):
                 mine_net = Mine(input_size=grad_dim * 2).to(device)
                 mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
@@ -124,7 +120,6 @@ def main(args):
                 mine_dataset = MINEDataset(joint, margin)
                 mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
                 
-                
                 for niter in range(num_iter):
                     mi_lb_sum = 0
                     ma_et = 1
@@ -134,6 +129,18 @@ def main(args):
                     if niter % 10 == 0:
                         logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
                     mine_results[iRound][k].append((niter, mi_lb.item()))
+                    
+        else:
+            local_model_updates = []
+            # Get the global model
+            ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
+
+            # Run local training epochs
+            ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True) for worker in workerByClient])
+
+            # Get local model updates
+            tmp_local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
+            local_model_updates += deepcopy(tmp_local_model_updates)    
 
         # Update the global model
         for name in global_model_param.keys():
@@ -152,12 +159,14 @@ parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
-parser.add_argument("--nEpochs", type=int, default=10)
+parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
 parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--alpha", type=float, default=1)
+parser.add_argument("--sampling", type=str, default="iid")
 args = parser.parse_args()
 
 main(args=args)

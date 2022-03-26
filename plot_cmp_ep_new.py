@@ -21,7 +21,7 @@ for tag in ["_small"]:
     if tag == "":
         user_list = [1,2,5,10,20,50]
     else:
-        user_list = [2,5,10,20]
+        user_list = [10,20]
 
     for use_norm in ["low", "high"]:
         fig, ax = plt.subplots()
@@ -29,13 +29,10 @@ for tag in ["_small"]:
         ax.xaxis.set_major_locator(plt.MaxNLocator(6))
         ax.tick_params(axis='x', labelsize=FONTSIZE)
         ax.tick_params(axis='y', labelsize=FONTSIZE)
-        for ep in [1,2,5,10]:
+    
+        for num_user in user_list:
             res = [{} for _ in range(3)]
-            for num_user in user_list:
-                # if ep == 5:
-                #     with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{ep}_new_cifar10.json", "r") as json_file:
-                #         data = json.load(json_file)
-                # else:
+            for ep in [1,2,5,10]:
                 with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{ep}{dataset}.json", "r") as json_file:
                     data = json.load(json_file)
                 avg_max_MI_by_round = []
@@ -71,14 +68,14 @@ for tag in ["_small"]:
                     avg_max_MI_by_round_high.append(np.mean(max_MI_by_round) + z_conf[conf] * np.std(max_MI_by_round) / np.sqrt(len(max_MI_by_round)))
                     all_max_MI_by_round += max_MI_by_round
 
-                res[0][num_user] = np.mean(avg_max_MI_by_round)
-                res[1][num_user] = np.mean(all_max_MI_by_round) - z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
-                res[2][num_user] = np.mean(all_max_MI_by_round) + z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
+                res[0][ep] = np.mean(avg_max_MI_by_round)
+                res[1][ep] = np.mean(all_max_MI_by_round) - z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
+                res[2][ep] = np.mean(all_max_MI_by_round) + z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
 
             ax.plot(list(res[0].keys()), list(res[0].values()), "*-")
-            ax.fill_between(user_list, list(res[1].values()), list(res[2].values()), alpha=.1)
-        ax.set_xlabel("Number of users", fontsize=FONTSIZE)
-        ax.legend(["E=1", "E=2", "E=5", "E=10"], fontsize=FONTSIZE)
+            ax.fill_between([1,2,5,10], list(res[1].values()), list(res[2].values()), alpha=.1)
+        ax.set_xlabel("Local training round $E$", fontsize=FONTSIZE)
+        ax.legend(["N=10", "N=20"], fontsize=FONTSIZE)
         ax.grid(True)
         if use_norm == "low":
             ax.set_ylabel("Normalized MI (%)", fontsize=FONTSIZE)

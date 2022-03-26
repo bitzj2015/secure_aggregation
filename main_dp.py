@@ -88,8 +88,13 @@ def main(args):
             ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
 
             # Get covariance matrix of gradients
-            res = ray.get([worker.estimate_cov_mat.remote(aug_factor=50) for worker in workerByClient])
-            print(res)
+            res = ray.get([worker.estimate_cov_mat.remote(aug_factor=10) for worker in workerByClient])
+            cov_mat = 0
+            for item in res:
+                cov_mat += item[1]
+            print(cov_mat.shape)
+            _, s, _ = torch.svd(cov_mat)
+            print(s[0:10], torch.min(s), s[-10:])
             # Run local training epochs
             for _ in range(nEpochs):
                 ray.get([worker.run_train_epoch.remote() for worker in workerByClient])
@@ -117,7 +122,7 @@ def main(args):
         
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
-parser.add_argument("--subset", type=int, default=2)
+parser.add_argument("--subset", type=int, default=100)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)

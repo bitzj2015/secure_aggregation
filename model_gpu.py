@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import torchvision
+import ray
+from copy import deepcopy
+torch.manual_seed(0)
 
 class LinearModel(torch.nn.Module):
 
@@ -39,7 +42,7 @@ class NonLinearModel(torch.nn.Module):
         torch.nn.init.uniform_(self.fc1.weight, a=0.0, b=0.01)
         # torch.nn.init.constant_(self.fc1.bias, 10.0)
         torch.nn.init.uniform_(self.fc1.bias, a=0.0, b=0.01)
-        self.sigmoid = torch.nn.Sigmoid()
+        self.sigmoid = torch.nn.ReLU()
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
@@ -133,3 +136,88 @@ class AlexNet(nn.Module):
     def forward(self, xb):
         xb = self.network(xb)
         return self.fc(xb)
+
+
+@ray.remote(num_gpus=0.05)
+class Worker(object):
+    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu"):
+        self.device = device
+        if model_name == "fcnn":
+            self.local_model = FCNNModel(dataset_name).to(device)
+        elif model_name == "linear":
+            self.local_model = LinearModel(dataset_name).to(device)
+        elif model_name == "nlinear":
+            self.local_model = NonLinearModel(dataset_name).to(device)
+        else:
+            self.local_model = AlexNet(dataset_name).to(device)
+        
+        self.grad_dim = sum(p.numel() for p in self.local_model.parameters())
+        # print(self.grad_dim)
+        self.local_loss = torch.nn.CrossEntropyLoss()
+        self.local_optimizer = torch.optim.SGD(self.local_model.parameters(), lr=lr, momentum=0.9)
+        self.global_optim_state = {'optimizer_state_dict': deepcopy(self.local_optimizer.state_dict()), 'model_state_dict': deepcopy(self.local_model.state_dict())}
+        self.lr = lr
+        self.local_dataloader = local_dataloader
+    
+    def get_grad_dim(self):
+        return int(self.grad_dim)
+
+    def run_train_epoch(self, ep=1, update_global_state=False):
+        self.local_model.train()
+        self.local_optimizer.load_state_dict(self.global_optim_state['optimizer_state_dict'])
+        self.local_model.load_state_dict(self.global_optim_state['model_state_dict'])
+        # print(self.local_model.state_dict()["network.5.running_var"])
+        for _ in range(ep):
+            for _, batch in enumerate(self.local_dataloader):
+                x, y = batch["x"].to(self.device), batch["y"].to(self.device)
+                self.local_optimizer.zero_grad()
+                outputs = self.local_model(x)
+                loss = self.local_loss(outputs, y)
+                loss.backward()
+                self.local_optimizer.step()
+                # break
+        if update_global_state:
+            self.global_optim_state['optimizer_state_dict'] = deepcopy(self.local_optimizer.state_dict())
+            # self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
+        return
+    
+    def pull_global_model(self, global_model_param):
+        with torch.no_grad():
+            for name, param in self.local_model.named_parameters():
+                param.data = global_model_param[name].clone().detach()
+        self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
+        return
+
+    def push_local_model_updates(self, old_global_model_param):
+        local_model_updates = {}
+        with torch.no_grad():
+            for name, param in self.local_model.named_parameters():
+                local_model_updates[name] = param.data.clone().detach() - old_global_model_param[name].clone().detach()
+        return local_model_updates
+
+    def get_local_model_param(self):
+        local_model_param = {}
+        with torch.no_grad():
+            for name, param in self.local_model.named_parameters():
+                local_model_param[name] = param.data.clone().detach()
+        return local_model_param
+
+    def run_eval_epoch(self, testdataloader):
+        self.local_model.eval()
+        count = 0
+        acc = 0
+        for _, batch in enumerate(testdataloader):
+            x, y = batch["x"].to(self.device), batch["y"].to(self.device)
+            outputs = self.local_model(x)
+            _, predicted_val = torch.max(outputs.data, 1)
+            count += y.size(0)
+            correct = (predicted_val == y).sum().item()
+            acc += correct
+        # print(outputs[0],y)
+        return acc / count
+
+    def random_transform(self, img):
+        rand_angle = torch.randint(-180, 180, (1, )).item()
+        aug_img = torchvision.transforms.functional.rotate(img, angle=rand_angle)
+        return aug_img
+

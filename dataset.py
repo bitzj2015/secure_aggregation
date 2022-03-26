@@ -94,7 +94,7 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
 
     trainDataSizeFracClients = 1 / nClients
     trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
-
+    print(sampling)
     if sampling == "iid":
         stIndex = 0
         dataloaderByClient = []
