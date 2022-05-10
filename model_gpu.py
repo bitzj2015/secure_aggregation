@@ -138,9 +138,9 @@ class AlexNet(nn.Module):
         return self.fc(xb)
 
 
-@ray.remote(num_gpus=0.05)
+@ray.remote
 class Worker(object):
-    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu"):
+    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu", algo="fedprox"):
         self.device = device
         if model_name == "fcnn":
             self.local_model = FCNNModel(dataset_name).to(device)
@@ -158,6 +158,7 @@ class Worker(object):
         self.global_optim_state = {'optimizer_state_dict': deepcopy(self.local_optimizer.state_dict()), 'model_state_dict': deepcopy(self.local_model.state_dict())}
         self.lr = lr
         self.local_dataloader = local_dataloader
+        self.algo = algo
     
     def get_grad_dim(self):
         return int(self.grad_dim)
@@ -172,9 +173,17 @@ class Worker(object):
                 x, y = batch["x"].to(self.device), batch["y"].to(self.device)
                 self.local_optimizer.zero_grad()
                 outputs = self.local_model(x)
-                loss = self.local_loss(outputs, y)
+                if self.algo == "fedprox":
+                    proximal_term = 0.0
+                    for name, param in self.local_model.named_parameters():
+                        proximal_term += (param - self.global_optim_state['model_state_dict'][name]).norm(2)
+                    loss = self.local_loss(outputs, y) + (0.03/ 2) * proximal_term
+                else:
+                    loss = self.local_loss(outputs, y)
                 loss.backward()
                 self.local_optimizer.step()
+                if self.algo == "fedsgd":
+                    break
                 # break
         if update_global_state:
             self.global_optim_state['optimizer_state_dict'] = deepcopy(self.local_optimizer.state_dict())

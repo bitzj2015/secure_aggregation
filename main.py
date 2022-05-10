@@ -150,7 +150,8 @@ def main(args):
     torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
     with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
         json.dump(mine_results, json_file)
-        
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
@@ -166,5 +167,6 @@ parser.add_argument("--k", type=int, default=5)
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument("--sampling", type=str, default="iid")
 args = parser.parse_args()
+
 
 main(args=args)

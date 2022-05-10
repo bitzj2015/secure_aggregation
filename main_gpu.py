@@ -1,3 +1,4 @@
+import os
 import torch
 import random
 import numpy as np
@@ -34,7 +35,11 @@ def main(args):
     use_cuda = False
     if torch.cuda.is_available():
         use_cuda = True
+        NUM_GPUS = 1
+    else:
+        NUM_GPUS = 0
     device = torch.device("cuda" if use_cuda else "cpu")
+
 
     nClients = args.total_nodes
     batch_size = args.batch_size
@@ -55,8 +60,8 @@ def main(args):
 
     dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling, alpha=args.alpha)
     
-    ray.init(num_gpus=1) #, device=device
-    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device) for i in range(len(clientSubSet))]
+    ray.init(num_cpus=os.cpu_count(), num_gpus=NUM_GPUS) #, device=device
+    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device, algo=args.algo) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
@@ -72,7 +77,7 @@ def main(args):
             cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
             global_model_param[name] += torch.mean(cur_param, axis=0)
         
-        if iRound % 1 == 0:
+        if iRound % 1 == 1:
             # Start iteration of MINE
             sample_individual_grad_concatenated = []
             sample_grad_aggregate_concatenated = []
@@ -148,7 +153,7 @@ def main(args):
             global_model_param[name] += torch.mean(cur_param, axis=0)
             # print(global_model_param[name])
 
-    torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
+    # torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
     with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
         json.dump(mine_results, json_file)
         
@@ -157,7 +162,7 @@ parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=10)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
@@ -167,6 +172,7 @@ parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
+parser.add_argument("--algo", type=str, default="fedprox")
 args = parser.parse_args()
 
 main(args=args)
