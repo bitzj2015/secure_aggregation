@@ -81,11 +81,6 @@ def main(args):
         ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
         acc = ray.get(workerByClient[0].run_eval_epoch.remote(testdataloader))
         logger.info(f"Round: {iRound}, test accuracy: {acc}")
-
-        local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
-        for name in global_model_param.keys():
-            cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
-            global_model_param[name] += torch.mean(cur_param, axis=0)
         
         if iRound % args.interval == 0:
             # Start iteration of MINE
@@ -170,9 +165,9 @@ def main(args):
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=10)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
