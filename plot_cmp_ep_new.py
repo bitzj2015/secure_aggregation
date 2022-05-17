@@ -5,17 +5,18 @@ plt.rcParams['font.family'] = 'Times New Roman'
 import numpy as np
 import math
 
-model = "fcnn"
+model = "nn"
 version = "ep"
-dataset = "_new32_mnist"
+dataset = "_may_mnist_fedprox"
 entropy = 1403 * 1000 # 25088 
-# entropy = 567 * 1200 # 1924
+entropy = 567 * 1200 # 1924
 FONTSIZE=24
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
 d = 7850
 num = 1
 fig_location = "final"
+root = "./results/fedprox"
 
 for tag in ["_small"]:
     if tag == "":
@@ -33,7 +34,7 @@ for tag in ["_small"]:
         for num_user in user_list:
             res = [{} for _ in range(3)]
             for ep in [1,2,5,10]:
-                with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{ep}{dataset}.json", "r") as json_file:
+                with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_{version}_{ep}{dataset}.json", "r") as json_file:
                     data = json.load(json_file)
                 avg_max_MI_by_round = []
                 avg_max_MI_by_round_low = []
@@ -82,4 +83,4 @@ for tag in ["_small"]:
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         elif use_norm == "high":
             ax.set_ylabel("Unnormalized MI (bits)", fontsize=FONTSIZE)
-        fig.savefig(f"./results/{fig_location}/results_cmp_ep_{version}_{use_norm}_avg{dataset}{tag}.jpg", bbox_inches='tight')
+        fig.savefig(f"{root}/{fig_location}/results_cmp_ep_{version}_{use_norm}_avg{dataset}{tag}.jpg", bbox_inches='tight')

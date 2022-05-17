@@ -3,11 +3,12 @@ import ray
 import torch
 import torchvision
 from copy import deepcopy
+import constant
+print(constant.cpu_per_worker, constant.gpu_per_worker)
 
-
-@ray.remote
+@ray.remote(num_cpus=constant.cpu_per_worker, num_gpus=constant.gpu_per_worker)
 class Worker(object):
-    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu"):
+    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu", algo="fedprox"):
         self.device = device
         if model_name == "fcnn":
             self.local_model = FCNNModel(dataset_name).to(device)
@@ -25,26 +26,33 @@ class Worker(object):
         self.global_optim_state = {'optimizer_state_dict': deepcopy(self.local_optimizer.state_dict()), 'model_state_dict': deepcopy(self.local_model.state_dict())}
         self.lr = lr
         self.local_dataloader = local_dataloader
+        self.algo = algo
     
     def get_grad_dim(self):
         return int(self.grad_dim)
 
-    def run_train_epoch(self, ep=1, update_global_state=False, use_sgd=False):
+    def run_train_epoch(self, ep=1, update_global_state=False):
         self.local_model.train()
         self.local_optimizer.load_state_dict(self.global_optim_state['optimizer_state_dict'])
         self.local_model.load_state_dict(self.global_optim_state['model_state_dict'])
         # print(self.local_model.state_dict()["network.5.running_var"])
         for _ in range(ep):
-            for k, batch in enumerate(self.local_dataloader):
+            for _, batch in enumerate(self.local_dataloader):
                 x, y = batch["x"].to(self.device), batch["y"].to(self.device)
                 self.local_optimizer.zero_grad()
                 outputs = self.local_model(x)
-                loss = self.local_loss(outputs, y)
+                if self.algo == "fedprox":
+                    proximal_term = 0.0
+                    for name, param in self.local_model.named_parameters():
+                        proximal_term += (param - self.global_optim_state['model_state_dict'][name]).norm(2)
+                    loss = self.local_loss(outputs, y) + (0.01/ 2) * proximal_term
+                else:
+                    loss = self.local_loss(outputs, y)
                 loss.backward()
                 self.local_optimizer.step()
-                # print(k)
-                if use_sgd:
+                if self.algo == "fedsgd":
                     break
+                # break
         if update_global_state:
             self.global_optim_state['optimizer_state_dict'] = deepcopy(self.local_optimizer.state_dict())
             # self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
@@ -89,36 +97,3 @@ class Worker(object):
         rand_angle = torch.randint(-180, 180, (1, )).item()
         aug_img = torchvision.transforms.functional.rotate(img, angle=rand_angle)
         return aug_img
-
-    def estimate_cov_mat(self, aug_factor=10):
-        grad_sample_set = []
-        self.local_model.train()
-        for _, batch in enumerate(self.local_dataloader):
-            x, y = batch["x"].to(self.device), batch["y"].to(self.device)
-            # todo: check if we can run it in batchss
-            for i in range(x.size(0)):
-                for _ in range(aug_factor):
-                    self.local_optimizer.zero_grad()
-                    outputs = self.local_model(self.random_transform(x[i:i+1]))
-                    loss = self.local_loss(outputs, y[i:i+1])
-                    grad_sample = torch.autograd.grad(loss, self.local_model.parameters(), retain_graph=True)
-                    grad_sample = torch.cat([t.reshape(-1) for t in grad_sample], dim=0)
-                    grad_sample_set.append(grad_sample)
-     
-        print(f"Gradient sample has size: {grad_sample.size()}, "
-                         f"total number of gradient samples: {len(grad_sample_set)}")
-        
-        grad_sample_set = torch.stack(grad_sample_set, dim=0)
-
-        print(f"Gradient sample mat has size: {grad_sample_set.size()}")
-
-        # Get covariance matrix from a set of gradient samples
-        cov_mat = grad_sample_set.t().matmul(grad_sample_set) / (grad_sample_set.size(0) - 1)
-        print(f"Covariance mat has size: {cov_mat.size()}")
-
-        # # Get the eigenvalues of covariance matrix
-        # _, s, _ = torch.svd(cov_mat)
-        # print(s[0:5])
-
-        return 0 , cov_mat #torch.min(s).item()
-

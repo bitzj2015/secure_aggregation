@@ -1,5 +1,7 @@
+import os
 import torch
 import random
+import constant
 import numpy as np
 from tqdm import tqdm
 import json
@@ -11,7 +13,7 @@ import ray
 import logging
 import subprocess
 from copy import deepcopy
-from worker import *
+torch.manual_seed(0)
 
 subprocess.run(["mkdir", "-p", "logs"])
 subprocess.run(["mkdir", "-p", "param"])
@@ -34,7 +36,11 @@ def main(args):
     use_cuda = False
     if torch.cuda.is_available():
         use_cuda = True
+        NUM_GPUS = 1
+    else:
+        NUM_GPUS = 0
     device = torch.device("cuda" if use_cuda else "cpu")
+
 
     nClients = args.total_nodes
     batch_size = args.batch_size
@@ -53,10 +59,19 @@ def main(args):
     clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
     clientSubSet = [0] + [item + 1 for item in clientSubSet]
 
-    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling)
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling, alpha=args.alpha)
     
-    ray.init()
-    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
+    if args.gpu_pw > 0:
+        ray.init(num_gpus=NUM_GPUS) #, device=device
+        constant.gpu_per_worker = NUM_GPUS / len(clientSubSet)
+        constant.cpu_per_worker = 0
+    else:
+        ray.init(num_cpus=os.cpu_count()) #, device=device
+        constant.gpu_per_worker = 0
+        constant.cpu_per_worker = int(os.cpu_count() / len(clientSubSet))
+    from worker import Worker
+
+    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device, algo=args.algo) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
@@ -72,12 +87,11 @@ def main(args):
             cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
             global_model_param[name] += torch.mean(cur_param, axis=0)
         
-        if iRound % 1 == 0:
+        if iRound % 1 == 1:
             # Start iteration of MINE
             sample_individual_grad_concatenated = []
             sample_grad_aggregate_concatenated = []
             local_model_updates = []
-            
             for m in tqdm(range(num_samples)):
                 local_model_updates = []
                 for _ in range(num_jobs):
@@ -96,7 +110,7 @@ def main(args):
                 # assert(len(local_model_updates) == nClients * num_jobs)
                 individual_grad_concatenated = []
                 grad_aggregate_concatenated = []
-                
+
                 for name in global_model_param.keys():
                     individual_grad_concatenated += torch.flatten(local_model_updates[0][name]).tolist()
                     cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
@@ -109,6 +123,7 @@ def main(args):
             X = np.array(sample_individual_grad_concatenated)
             Y = np.array(sample_grad_aggregate_concatenated)
             joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
+            
             for k in range(args.k):
                 mine_net = Mine(input_size=grad_dim * 2).to(device)
                 mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
@@ -129,6 +144,7 @@ def main(args):
                     if niter % 10 == 0:
                         logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
                     mine_results[iRound][k].append((niter, mi_lb.item()))
+                    
         else:
             local_model_updates = []
             # Get the global model
@@ -147,26 +163,27 @@ def main(args):
             global_model_param[name] += torch.mean(cur_param, axis=0)
             # print(global_model_param[name])
 
-    torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
+    # torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
     with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
         json.dump(mine_results, json_file)
-
-
+        
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=10)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
-parser.add_argument("--k", type=int, default=5)
+parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
+parser.add_argument("--algo", type=str, default="fedprox")
+parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
 args = parser.parse_args()
-
 
 main(args=args)
