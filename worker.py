@@ -5,19 +5,20 @@ import torchvision
 from copy import deepcopy
 import constant
 print(constant.cpu_per_worker, constant.gpu_per_worker)
+from utils.dlg import DLGAttack
 
 @ray.remote(num_cpus=constant.cpu_per_worker, num_gpus=constant.gpu_per_worker)
 class Worker(object):
-    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu", algo="fedprox"):
+    def __init__(self, local_dataloader, lr, model_name="fcnn", dataset_name="mnist", device="cpu", algo="fedprox", num_class=10):
         self.device = device
         if model_name == "fcnn":
-            self.local_model = FCNNModel(dataset_name).to(device)
+            self.local_model = FCNNModel(dataset_name, num_class).to(device)
         elif model_name == "linear":
-            self.local_model = LinearModel(dataset_name).to(device)
+            self.local_model = LinearModel(dataset_name, num_class).to(device)
         elif model_name == "nlinear":
-            self.local_model = NonLinearModel(dataset_name).to(device)
+            self.local_model = NonLinearModel(dataset_name, num_class).to(device)
         else:
-            self.local_model = AlexNet(dataset_name).to(device)
+            self.local_model = AlexNet(dataset_name, num_class).to(device)
         
         self.grad_dim = sum(p.numel() for p in self.local_model.parameters())
         # print(self.grad_dim)
@@ -31,11 +32,13 @@ class Worker(object):
     def get_grad_dim(self):
         return int(self.grad_dim)
 
-    def run_train_epoch(self, ep=1, update_global_state=False):
+    def run_train_epoch(self, ep=1, update_global_state=False, traindataloader=None):
         self.local_model.train()
         self.local_optimizer.load_state_dict(self.global_optim_state['optimizer_state_dict'])
         self.local_model.load_state_dict(self.global_optim_state['model_state_dict'])
         # print(self.local_model.state_dict()["network.5.running_var"])
+        if traindataloader != None:
+            self.local_dataloader = traindataloader
         for _ in range(ep):
             for _, batch in enumerate(self.local_dataloader):
                 x, y = batch["x"].to(self.device), batch["y"].to(self.device)
@@ -56,7 +59,7 @@ class Worker(object):
         if update_global_state:
             self.global_optim_state['optimizer_state_dict'] = deepcopy(self.local_optimizer.state_dict())
             # self.global_optim_state['model_state_dict'] = deepcopy(self.local_model.state_dict())
-        return
+        return (x,y)
     
     def pull_global_model(self, global_model_param):
         with torch.no_grad():
@@ -97,3 +100,10 @@ class Worker(object):
         rand_angle = torch.randint(-180, 180, (1, )).item()
         aug_img = torchvision.transforms.functional.rotate(img, angle=rand_angle)
         return aug_img
+
+    def run_dlg(self, images, labels, target_grad, ep):
+        criterion = torch.nn.CrossEntropyLoss()
+        self.local_model.load_state_dict(self.global_optim_state['model_state_dict'])
+        DLGAttack(images, labels, self.local_model, criterion, target_grad, ep)
+        
+

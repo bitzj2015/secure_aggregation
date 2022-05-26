@@ -5,11 +5,11 @@ plt.rcParams['font.family'] = 'Times New Roman'
 import numpy as np
 import math
 
-model = "nn"
+model = "fcnn"
 version = "ep"
 dataset = "_may_mnist_fedprox"
 entropy = 1403 * 1000 # 25088 
-entropy = 567 * 1200 # 1924
+# entropy = 567 * 1200 # 1924
 FONTSIZE=24
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"

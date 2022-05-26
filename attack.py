@@ -1,10 +1,7 @@
 import os
 import torch
-import random
 import constant
 import numpy as np
-from tqdm import tqdm
-import json
 import argparse
 from mine import *
 from model import *
@@ -14,6 +11,10 @@ import logging
 import subprocess
 from copy import deepcopy
 torch.manual_seed(0)
+
+# from utils.utils import label_to_onehot, cross_entropy_for_onehot
+# from utils.utils import build_network
+from utils.dataproc import data_lowrank, data_withnoise
 
 subprocess.run(["mkdir", "-p", "logs"])
 subprocess.run(["mkdir", "-p", "param"])
@@ -52,9 +53,6 @@ def main(args):
         num_jobs = subset // nClients
         subset = nClients
 
-
-    num_iter = 1000
-    num_samples = args.num_sample
     np.random.seed(0)
     clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
     clientSubSet = [0] + [item + 1 for item in clientSubSet]
@@ -73,7 +71,6 @@ def main(args):
 
     workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device, algo=args.algo) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
-    grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
 
     for iRound in range(trainTotalRounds):
@@ -82,54 +79,45 @@ def main(args):
         acc = ray.get(workerByClient[0].run_eval_epoch.remote(testdataloader))
         logger.info(f"Round: {iRound}, test accuracy: {acc}")
 
-        local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
+        local_model_updates = []
+        for n in range(num_jobs):
+            # Run local training epochs
+            res = ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True) for worker in workerByClient])
+            if n == 0:
+                data_batch = res[0]
+
+            # Get local model updates
+            tmp_local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
+            local_model_updates += deepcopy(tmp_local_model_updates)
+        # assert(len(local_model_updates) == nClients * num_jobs)
+        individual_grad_concatenated = []
+        grad_aggregate_concatenated = []
+
+        for name in global_model_param.keys():
+            individual_grad_concatenated += torch.flatten(local_model_updates[0][name]).tolist()
+            cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
+            grad_aggregate_concatenated += torch.flatten(torch.mean(cur_param, axis=0)).tolist()
+
+        # Update the global model
         for name in global_model_param.keys():
             cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
             global_model_param[name] += torch.mean(cur_param, axis=0)
-        
-        if iRound % args.interval == 0:
-            # Start iteration of MINE
-            sample_individual_grad_concatenated = []
-            sample_grad_aggregate_concatenated = []
-            local_model_updates = []
-            for _ in range(num_jobs):
-                # Get the global model
-                # ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
-                if m == num_samples - 1:
-                    # Run local training epochs
-                    ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True) for worker in workerByClient])
-                else:
-                    # Run local training epochs
-                    ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=False) for worker in workerByClient])
-
-                # Get local model updates
-                tmp_local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
-                local_model_updates += deepcopy(tmp_local_model_updates)
-            # assert(len(local_model_updates) == nClients * num_jobs)
-            individual_grad_concatenated = []
-            grad_aggregate_concatenated = []
-
-            for name in global_model_param.keys():
-                individual_grad_concatenated += torch.flatten(local_model_updates[0][name]).tolist()
-                cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
-                grad_aggregate_concatenated += torch.flatten(torch.mean(cur_param, axis=0)).tolist()
-
-            sample_individual_grad_concatenated.append(individual_grad_concatenated)
-            sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated)
 
         # Train MINE network
-        X = np.array(sample_individual_grad_concatenated)
-        Y = np.array(sample_grad_aggregate_concatenated)
-        joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
-            
+        X = torch.Tensor(np.array(individual_grad_concatenated)).to(device)
+        Y = torch.Tensor(np.array(grad_aggregate_concatenated)).to(device)
+        (image, label) = data_batch
+        # print(Y.shape, image.size(), label.size())
+        ray.get(workerByClient[0].run_dlg.remote(image, label, Y, iRound))
+        
         
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=10)
-parser.add_argument("--trainTotalRounds", type=int, default=30)
+parser.add_argument("--trainTotalRounds", type=int, default=1)
 parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
@@ -138,7 +126,7 @@ parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
-parser.add_argument("--algo", type=str, default="fedprox")
+parser.add_argument("--algo", type=str, default="fedsgd")
 parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
 parser.add_argument("--interval", dest="interval", type=int, default=1)
 args = parser.parse_args()

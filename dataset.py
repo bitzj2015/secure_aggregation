@@ -5,7 +5,8 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 import numpy as np
 from skimage.measure.entropy import shannon_entropy
-
+import os, json
+import ray
 
 class TaskDataset(Dataset):
     def __init__(self, input, label, client_id=-1):
@@ -94,7 +95,7 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
 
     trainDataSizeFracClients = 1 / nClients
     trainDataSizeClients = np.int32(trainDataSizeFracClients * trainDataSize)
-    print(sampling)
+
     if sampling == "iid":
         stIndex = 0
         dataloaderByClient = []
@@ -177,25 +178,63 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
 
     return dataloaderByClient, test_loader
 
+@ray.remote
+def get_femnist_worker(dir_files, root_dir = "./leaf/data/femnist/data/train"):
+    res = {}
+    for filename in dir_files:
+        with open(f"{root_dir}/{filename}", "r") as file:
+            data = json.load(file)
+        res.update(data['user_data'])
 
+    return res
 
-# train_data = datasets.EMNIST(
-#     root = 'data',
-#     train = True,                         
-#     transform = ToTensor(), 
-#     download = True,
-#     split ="byclass"          
-# )
-# test_data = datasets.EMNIST(
-#     root = 'data', 
-#     train = False, 
-#     transform = ToTensor(),
-#     split ="byclass"
-# )
-# print(train_data)
+def get_femnist(batch_size=32, logger=None):
+    root_dir_train = "./leaf/data/femnist/data/train"
+    dir_files = os.listdir(root_dir_train)
+    num_files  = len(dir_files)
 
-# target_user_entropy = 0
-# for img in train_data.data[:1200]:
-#     for k in range(img.shape[-1]):
-#         target_user_entropy += shannon_entropy(img[:,:,k], base=2)
-# print(target_user_entropy, 1200)
+    ret = ray.get([
+        get_femnist_worker.remote(
+            [dir_files[i]], root_dir_train
+        ) for i in range(num_files)
+    ])
+    user_ids = {}
+    count = 0
+    dataloaderByClient = []
+    for data in ret:
+        for user in data.keys():
+            user_ids[count] = user
+            train_dataset = TaskDataset(
+                torch.from_numpy(np.array(data[user]["x"]).reshape(-1, 28, 28, 1).astype("float32")), 
+                torch.from_numpy(np.array(data[user]["y"]).reshape(-1)),
+                client_id = count
+            )
+            count += 1
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            dataloaderByClient.append(train_loader)
+
+    root_dir_test = "./leaf/data/femnist/data/test"
+    dir_files = os.listdir(root_dir_test)
+    num_files  = len(dir_files)
+
+    ret = ray.get([
+        get_femnist_worker.remote(
+            [dir_files[i]], root_dir_test
+        ) for i in range(num_files)
+    ])
+    
+    X = []
+    Y = []
+    for data in ret:
+        for user in data.keys():
+            X += data[user]["x"]
+            Y += data[user]["y"]
+    test_dataset = TaskDataset(
+        torch.from_numpy(np.array(X).reshape(-1, 28, 28, 1).astype("float32")), 
+        torch.from_numpy(np.array(Y).reshape(-1)),
+    )
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    logger.info(f"Number of users: {count}")
+
+    return dataloaderByClient, test_loader, count

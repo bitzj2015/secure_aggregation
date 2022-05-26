@@ -9,8 +9,8 @@ FONTSIZE = 24
 # version = "avg_sgd_cifar10"
 # version = "avg_sgd"
 version = "may_mnist_fedprox"
-entropy = 1403 * 1000 # cifar10
-entropy = 567 * 1000 # mnist
+# entropy = 1403 * 1000 # cifar10
+entropy = 567 * 1200 # mnist
 root = "./results/fedprox"
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
@@ -24,7 +24,7 @@ for tag in ["_small"]:
         user_list = [1,2,5,10,20,50]
         baseline_raw = [entropy] + [d / 2 * np.log(n / (n-1)) for n in [2,5,10,20,50]]
     else:
-        user_list = [2,5,10,20]
+        user_list = [2,5,10,20,50]
         baseline_raw = [d / 2 * np.log(n / (n-1)) for n in [2,5,10,20,50]]
 
     for use_norm in ["high", "low"]:
@@ -34,8 +34,8 @@ for tag in ["_small"]:
         ax.tick_params(axis='x', labelsize=FONTSIZE)
         ax.tick_params(axis='y', labelsize=FONTSIZE)
 
-        # for model in ["lin", "nlinear", "cnn"]:
-        for model in ["linear", "fcnn", "nn"]:
+        # for model in ["linear", "nlinear", "cnn"]:
+        for model in ["linear", "nlinear", "fcnn"]:
             res = [{} for _ in range(3)]
             for num_user in user_list:
                 # if model == "nlinear":
@@ -87,9 +87,9 @@ for tag in ["_small"]:
             ax.fill_between(user_list, list(res[1].values()), list(res[2].values()), alpha=.1)
         ax.set_xlabel("Number of users", fontsize=FONTSIZE)
         # ax.legend(["linear, d=7890", "fcnn, d=7890", "fcnn, d=89610"], fontsize=FONTSIZE)
-        # ax.legend(["Linear", "SLP", "MLP"], fontsize=FONTSIZE)
-        # ax.legend(["linear, d=30730", "fcnn, d=30730", "cnn, d=82554"], fontsize=FONTSIZE)
         ax.legend(["Linear", "SLP", "MLP"], fontsize=FONTSIZE)
+        # ax.legend(["linear, d=30730", "fcnn, d=30730", "cnn, d=82554"], fontsize=FONTSIZE)
+        # ax.legend(["Linear", "SLP", "CNN"], fontsize=FONTSIZE)
         ax.grid(True)
         if use_norm == "low":
             ax.set_ylabel("Normalized MI (%)", fontsize=FONTSIZE)

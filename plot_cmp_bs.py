@@ -9,10 +9,15 @@ from scipy.stats import gmean
 model = "cnn"
 version = "bs"
 tag = "_new_cifar10"
+
+model = "fcnn"
+version = "bs"
+tag = "_may_mnist_fedprox"
 FONTSIZE = 24
+root = "./results/fedprox"
 
 entropy = 1403 * 1000 # 25088 
-# entropy = 567 * 32 # 1924
+entropy = 567 * 1200 # 1924
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
@@ -29,14 +34,13 @@ for use_norm in ["high", "low"]:
     ax.tick_params(axis='x', labelsize=FONTSIZE)
     ax.tick_params(axis='y', labelsize=FONTSIZE)
     for bs in [16, 32, 64, 128, 256]:
-        entropy = 1403 * 1000
         res = [{} for _ in range(3)]
         for num_user in user_list:
             # if bs == 32:
-            #     with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_avg{tag}.json", "r") as json_file:
+            #     with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_avg{tag}.json", "r") as json_file:
             #         data = json.load(json_file)
             # else:
-            with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{bs}{tag}.json", "r") as json_file:
+            with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_{version}_{bs}{tag}.json", "r") as json_file:
                 data = json.load(json_file)
             
             avg_max_MI_by_round = []
@@ -87,7 +91,7 @@ for use_norm in ["high", "low"]:
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     elif use_norm == "high":
         ax.set_ylabel("Unnormalized MI (bits)", fontsize=FONTSIZE)
-    fig.savefig(f"./results/{fig_location}/results_cmp_bs_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
+    fig.savefig(f"{root}/{fig_location}/results_cmp_bs_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
 
 # for use_norm in ["low", "high"]:
 #     fig, ax = plt.subplots()
@@ -100,10 +104,10 @@ for use_norm in ["high", "low"]:
 #         res = [{} for _ in range(3)]
 #         for bs in [16, 32, 64, 128, 256]:
 #             # if bs == 32:
-#             #     with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_avg_cifar10.json", "r") as json_file:
+#             #     with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_avg_cifar10.json", "r") as json_file:
 #             #         data = json.load(json_file)
 #             # else:
-#             with open(f"./results/{model}/loss_{num_user}_{model}_{num_user}_{version}_{bs}{tag}.json", "r") as json_file:
+#             with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_{version}_{bs}{tag}.json", "r") as json_file:
 #                 data = json.load(json_file)
             
 #             avg_max_MI_by_round = []
@@ -155,4 +159,4 @@ for use_norm in ["high", "low"]:
 #         ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 #     elif use_norm == "high":
 #         ax.set_ylabel("Unnormalized MI (%)", fontsize=FONTSIZE)
-#     fig.savefig(f"./results/{fig_location}/results_cmp_n_bs_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
+#     fig.savefig(f"{root}/{fig_location}/results_cmp_n_bs_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')

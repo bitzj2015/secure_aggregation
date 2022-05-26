@@ -6,14 +6,14 @@ torch.manual_seed(0)
 
 class LinearModel(torch.nn.Module):
 
-    def __init__(self, dataset_name="mnist"):
+    def __init__(self, dataset_name="mnist", num_class=10):
         super(LinearModel, self).__init__()
         self.dataset_name = dataset_name
         if self.dataset_name == "mnist":
-            self.fc1 = torch.nn.Linear(784, 10)
+            self.fc1 = torch.nn.Linear(784, num_class)
             # self.grad_dim = 7850
         elif self.dataset_name == "cifar10":
-            self.fc1 = torch.nn.Linear(32*32*3, 10)
+            self.fc1 = torch.nn.Linear(32*32*3, num_class)
             # self.grad_dim = 30730
         else:
             print("No such dataset!")
@@ -26,20 +26,20 @@ class LinearModel(torch.nn.Module):
         return x
 
 class NonLinearModel(torch.nn.Module):
-    def __init__(self, dataset_name="mnist"):
+    def __init__(self, dataset_name="mnist", num_class=10):
         super(NonLinearModel, self).__init__()
         self.dataset_name = dataset_name
         if self.dataset_name == "mnist":
-            self.fc1 = torch.nn.Linear(784, 10)
+            self.fc1 = torch.nn.Linear(784, num_class)
+            torch.nn.init.constant_(self.fc1.bias, 10.0)
             # self.grad_dim = 7850
         elif self.dataset_name == "cifar10":
-            self.fc1 = torch.nn.Linear(32*32*3, 10)
+            self.fc1 = torch.nn.Linear(32*32*3, num_class)
+            torch.nn.init.uniform_(self.fc1.bias, a=0.0, b=0.01)
             # self.grad_dim = 30730
         else:
             print("No such dataset!")
         torch.nn.init.uniform_(self.fc1.weight, a=0.0, b=0.01)
-        # torch.nn.init.constant_(self.fc1.bias, 10.0)
-        torch.nn.init.uniform_(self.fc1.bias, a=0.0, b=0.01)
         self.sigmoid = torch.nn.ReLU()
 
     def forward(self, x):
@@ -48,7 +48,7 @@ class NonLinearModel(torch.nn.Module):
         return x
 
 class FCNNModel(torch.nn.Module):
-    def __init__(self, dataset_name="mnist"):
+    def __init__(self, dataset_name="mnist", num_class=10):
         super(FCNNModel, self).__init__()
         self.dataset_name = dataset_name
         if self.dataset_name == "mnist":
@@ -57,7 +57,7 @@ class FCNNModel(torch.nn.Module):
                 torch.nn.ReLU(),
                 torch.nn.Linear(100, 100),
                 torch.nn.ReLU(),
-                torch.nn.Linear(100, 10),
+                torch.nn.Linear(100, num_class),
             )
             self.grad_dim = 89610
         elif self.dataset_name == "cifar10":
@@ -66,7 +66,7 @@ class FCNNModel(torch.nn.Module):
                 torch.nn.ReLU(),
                 # torch.nn.Linear(100, 100),
                 # torch.nn.ReLU(),
-                torch.nn.Linear(100, 10),
+                torch.nn.Linear(100, num_class),
             )
             self.grad_dim = 318410
         else:
@@ -79,7 +79,7 @@ class FCNNModel(torch.nn.Module):
         return x
 
 class AlexNet(nn.Module):
-    def __init__(self, dataset_name="mnist"):
+    def __init__(self, dataset_name="mnist", num_class=10):
         super().__init__()
         self.dataset_name = dataset_name
         if self.dataset_name == "mnist":
@@ -111,7 +111,7 @@ class AlexNet(nn.Module):
             nn.MaxPool2d(2, 2), # output: 64 x 4 x 4
             nn.BatchNorm2d(64),
             nn.Flatten())
-        self.fc = nn.Linear(self.out_dim, 10)
+        self.fc = nn.Linear(self.out_dim, num_class)
         
     def forward(self, xb):
         xb = self.network(xb)
