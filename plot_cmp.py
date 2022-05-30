@@ -1,4 +1,5 @@
 import json
+from turtle import color
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 plt.rcParams['font.family'] = 'Times New Roman'
@@ -32,10 +33,11 @@ for tag in ["_small"]:
         ax.yaxis.set_major_locator(plt.MaxNLocator(6))
         ax.xaxis.set_major_locator(plt.MaxNLocator(6))
         ax.tick_params(axis='x', labelsize=FONTSIZE)
-        ax.tick_params(axis='y', labelsize=FONTSIZE)
+        ax.tick_params(axis='y', labelsize=FONTSIZE, colors='blue')
 
         # for model in ["linear", "nlinear", "cnn"]:
-        for model in ["linear", "nlinear", "fcnn"]:
+        # for model in ["linear", "nlinear", "fcnn"]:
+        for model in ["nlinear"]:
             res = [{} for _ in range(3)]
             for num_user in user_list:
                 # if model == "nlinear":
@@ -83,19 +85,24 @@ for tag in ["_small"]:
                 res[1][num_user] = np.mean(all_max_MI_by_round) - z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
                 res[2][num_user] = np.mean(all_max_MI_by_round) + z_conf[conf] * np.std(all_max_MI_by_round) / np.sqrt(len(all_max_MI_by_round))
 
-            ax.plot(list(res[0].keys()), list(res[0].values()), "*-")
+            ax.plot(list(res[0].keys()), list(res[0].values()), "b*-")
             ax.fill_between(user_list, list(res[1].values()), list(res[2].values()), alpha=.1)
+        ax2 = ax.twinx()
+        ax2.plot(list(res[0].keys()), [6.13, 5.51, 4.77, 4.68, 4.56], "r*-")
+        ax2.set_ylabel('PSNR', color='r')
         ax.set_xlabel("Number of users", fontsize=FONTSIZE)
         # ax.legend(["linear, d=7890", "fcnn, d=7890", "fcnn, d=89610"], fontsize=FONTSIZE)
-        ax.legend(["Linear", "SLP", "MLP"], fontsize=FONTSIZE)
+        # ax.legend(["Linear", "SLP", "MLP"], fontsize=FONTSIZE)
         # ax.legend(["linear, d=30730", "fcnn, d=30730", "cnn, d=82554"], fontsize=FONTSIZE)
         # ax.legend(["Linear", "SLP", "CNN"], fontsize=FONTSIZE)
         ax.grid(True)
         if use_norm == "low":
-            ax.set_ylabel("Normalized MI (%)", fontsize=FONTSIZE)
+            ax.set_ylabel("Normalized MI (%)", fontsize=FONTSIZE, color='blue')
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
         elif use_norm == "high":
             ax.set_ylabel("Unormalized MI (bits)", fontsize=FONTSIZE)
-
+        ax2.set_ylabel("PSNR", fontsize=FONTSIZE)
+        ax2.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+        ax2.tick_params(axis='y', labelsize=FONTSIZE, colors='red')
         # fig.savefig(f"{root}/{fig_location}/results_cmp_{version}_{use_norm}_avg{tag}.eps", bbox_inches='tight')
-        fig.savefig(f"{root}/{fig_location}/results_cmp_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
+        fig.savefig(f"{root}/{fig_location}/results_cmp_{version}_{use_norm}_avg{tag}_dlg.jpg", bbox_inches='tight')

@@ -1,23 +1,25 @@
+import os
 import torch
 import random
+import constant
 import numpy as np
 from tqdm import tqdm
 import json
 import argparse
 from mine import *
 from model import *
-from worker import *
 from dataset import *
 import ray
 import logging
 import subprocess
 from copy import deepcopy
-import h5py
+import h5py, time
+torch.manual_seed(0)
 
 subprocess.run(["mkdir", "-p", "logs"])
 subprocess.run(["mkdir", "-p", "param"])
 subprocess.run(["mkdir", "-p", "results"])
-tag = ""
+
 def main(args):
     # Define logger
 
@@ -35,7 +37,11 @@ def main(args):
     use_cuda = False
     if torch.cuda.is_available():
         use_cuda = True
+        NUM_GPUS = 1
+    else:
+        NUM_GPUS = 0
     device = torch.device("cuda" if use_cuda else "cpu")
+
 
     nClients = args.total_nodes
     batch_size = args.batch_size
@@ -47,16 +53,29 @@ def main(args):
         num_jobs = subset // nClients
         subset = nClients
 
+
     num_iter = 1000
     num_samples = args.num_sample
-    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger)
-    np.random.seed(1)
-    ray.init()
+    np.random.seed(0)
+    clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
+    clientSubSet = [0] + [item + 1 for item in clientSubSet]
+
+    dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling, alpha=args.alpha)
+    
+    if args.gpu_pw > 0:
+        ray.init(num_gpus=NUM_GPUS) #, device=device
+        constant.gpu_per_worker = NUM_GPUS / len(clientSubSet)
+        constant.cpu_per_worker = 0
+    else:
+        ray.init(num_cpus=os.cpu_count()) #, device=device
+        constant.gpu_per_worker = 0
+        constant.cpu_per_worker = int(os.cpu_count() / len(clientSubSet))
+    from worker import Worker
 
     mine_results = {}
 
     if args.resample:
-        for k in range(10):
+        for k in range(args.k):
             mine_results[k] = {}
             all_sample_individual_grad_concatenated = []
             all_sample_grad_aggregate_concatenated = []
@@ -65,12 +84,19 @@ def main(args):
             for _ in tqdm(range(num_samples)):
                 # np.random.seed(0)
                 clientSubSet = np.random.choice(nClients, subset, replace=True)
-                # clientSubSet = [0] + [item + 1 for item in clientSubSet]
+
+                workerByClient = [Worker.remote(
+                    dataloaderByClient[clientSubSet[i]], 
+                    lr=args.lr, 
+                    model_name=args.model, 
+                    dataset_name=args.dataset, 
+                    device=device, 
+                    algo=args.algo
+                    ) for i in range(len(clientSubSet))
+                ]
                 
-                workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset) for i in range(len(clientSubSet))]
                 global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
-                # grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
-                # print(clientSubSet[0])
+
                 sample_individual_grad_concatenated = []
                 sample_grad_aggregate_concatenated = []
                 xdata.append(dataloaderByClient[clientSubSet[0]].dataset.input.cpu().numpy().reshape(-1))
@@ -81,18 +107,18 @@ def main(args):
                     logger.info(f"Round: {iRound}, test accuracy: {acc}")
 
                     local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
+                    
                     for name in global_model_param.keys():
                         cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
                         global_model_param[name] += torch.mean(cur_param, axis=0)
-                    
+
                     local_model_updates = []
                     for _ in range(num_jobs):
                         # Get the global model
-                        
                         ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
 
                         # Run local training epochs
-                        ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True, use_sgd=args.use_sgd) for worker in workerByClient])
+                        ray.get([worker.run_train_epoch.remote(ep=nEpochs, update_global_state=True) for worker in workerByClient])
 
                         # Get local model updates
                         tmp_local_model_updates = ray.get([worker.push_local_model_updates.remote(global_model_param) for worker in workerByClient])
@@ -121,16 +147,16 @@ def main(args):
             Y1 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_individual_grad_concatenated])
             Y2 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_grad_aggregate_concatenated])
 
-            hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}.hdf5", "w")
+            hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}_{args.algo}.hdf5", "w")
             hf.create_dataset('xdata', data=X)
             hf.create_dataset('ygrad1', data=Y1)
             hf.create_dataset('ygrad2', data=Y2)
             hf.close()
     else:
         mine_results = {}
-        for k in range(10):
+        for k in range(5):
             mine_results[k] = {}
-            hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}.hdf5", "r")
+            hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}_{args.algo}.hdf5", "r")
             X = np.array(hf["xdata"][:])
             Y_all = list(np.array(hf["ygrad2"][:]))
             print(X.shape, len(Y_all[0]))
@@ -167,8 +193,8 @@ def main(args):
         
 parser = argparse.ArgumentParser()
 parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
-parser.add_argument("--subset", type=int, default=20)
-parser.add_argument("--batch-size", dest="batch_size", type=int, default=256)
+parser.add_argument("--subset", type=int, default=50)
+parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
 parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
@@ -176,9 +202,13 @@ parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
+parser.add_argument("--k", type=int, default=5)
 parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--alpha", type=float, default=1)
+parser.add_argument("--sampling", type=str, default="iid")
 parser.add_argument('--resample', dest="resample", default=False, action='store_true')
-parser.add_argument('--sgd', dest="use_sgd", default=False, action='store_true')
+parser.add_argument("--algo", type=str, default="fedprox")
+parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
 args = parser.parse_args()
 
 main(args=args)

@@ -210,7 +210,7 @@ def get_femnist(batch_size=32, logger=None):
                 client_id = count
             )
             count += 1
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
             dataloaderByClient.append(train_loader)
 
     root_dir_test = "./leaf/data/femnist/data/test"
@@ -234,7 +234,7 @@ def get_femnist(batch_size=32, logger=None):
         torch.from_numpy(np.array(Y).reshape(-1)),
     )
 
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     logger.info(f"Number of users: {count}")
 
     return dataloaderByClient, test_loader, count

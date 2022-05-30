@@ -53,10 +53,12 @@ def main(args):
         constant.cpu_per_worker = int(os.cpu_count() / subset)
         constant.gpu_per_worker = NUM_GPUS / subset
         constant.cpu_per_worker = 0
+        worker_device = device
     else:
         ray.init(num_cpus=os.cpu_count()) #, device=device
         constant.gpu_per_worker = 0
         constant.cpu_per_worker = int(os.cpu_count() / subset)
+        worker_device = device = torch.device("cpu")
     from worker import Worker
 
     dataloaderByClient, testdataloader, nClients = get_femnist(batch_size, logger)
@@ -72,7 +74,7 @@ def main(args):
         lr=args.lr, 
         model_name=args.model, 
         dataset_name=args.dataset, 
-        device=device, 
+        device=worker_device, 
         algo=args.algo, 
         num_class=62
         ) for i in range(len(clientSubSet))
@@ -95,7 +97,7 @@ def main(args):
         clientSubSet = np.random.choice(nClients-1, subset-1, replace=True)
         clientSubSet = [0] + [item + 1 for item in clientSubSet]
 
-        if iRound % args.interval == 100:
+        if iRound % args.interval == 0:
             # Start iteration of MINE
             sample_individual_grad_concatenated = []
             sample_grad_aggregate_concatenated = []
@@ -136,31 +138,31 @@ def main(args):
                 sample_individual_grad_concatenated.append(individual_grad_concatenated)
                 sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated)
 
-            # Train MINE network
-            X = np.array(sample_individual_grad_concatenated)
-            Y = np.array(sample_grad_aggregate_concatenated)
-            joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
+            # # Train MINE network
+            # X = np.array(sample_individual_grad_concatenated)
+            # Y = np.array(sample_grad_aggregate_concatenated)
+            # joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
             
-            for k in range(args.k):
-                mine_net = Mine(input_size=grad_dim * 2).to(device)
-                mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
-                mine_net.train()
-                mine_results[iRound][k] = []
-                random.shuffle(sample_grad_aggregate_concatenated)
-                Y_ = np.array(sample_grad_aggregate_concatenated)
-                margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
-                mine_dataset = MINEDataset(joint, margin)
-                mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
+            # for k in range(args.k):
+            #     mine_net = Mine(input_size=grad_dim * 2).to(device)
+            #     mine_net_optim = torch.optim.Adam(mine_net.parameters(), lr=0.01)
+            #     mine_net.train()
+            #     mine_results[iRound][k] = []
+            #     random.shuffle(sample_grad_aggregate_concatenated)
+            #     Y_ = np.array(sample_grad_aggregate_concatenated)
+            #     margin = torch.from_numpy(np.concatenate([X, Y_], axis=1).astype("float32"))
+            #     mine_dataset = MINEDataset(joint, margin)
+            #     mine_traindataloader = DataLoader(mine_dataset, batch_size=args.mine_batch_size, shuffle=True)
                 
-                for niter in range(num_iter):
-                    mi_lb_sum = 0
-                    ma_et = 1
-                    for i, batch in enumerate(mine_traindataloader):
-                        mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
-                        mi_lb_sum += mi_lb
-                    if niter % 10 == 0:
-                        logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
-                    mine_results[iRound][k].append((niter, mi_lb.item()))
+            #     for niter in range(num_iter):
+            #         mi_lb_sum = 0
+            #         ma_et = 1
+            #         for i, batch in enumerate(mine_traindataloader):
+            #             mi_lb, ma_et = learn_mine(batch, device, mine_net, mine_net_optim, ma_et)
+            #             mi_lb_sum += mi_lb
+            #         if niter % 10 == 0:
+            #             logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
+            #         mine_results[iRound][k].append((niter, mi_lb.item()))
                     
         else:
             local_model_updates = []
@@ -194,19 +196,19 @@ parser.add_argument("--total-nodes", dest="total_nodes", type=int, default=50)
 parser.add_argument("--subset", type=int, default=50)
 parser.add_argument("--batch-size", dest="batch_size", type=int, default=32)
 parser.add_argument("--mine-batch-size", dest="mine_batch_size", type=int, default=100)
-parser.add_argument("--num-sample", dest="num_sample", type=int, default=100)
+parser.add_argument("--num-sample", dest="num_sample", type=int, default=3)
 parser.add_argument("--trainTotalRounds", type=int, default=30)
-parser.add_argument("--nEpochs", type=int, default=30)
+parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
 parser.add_argument("--k", type=int, default=10)
-parser.add_argument("--lr", type=float, default=0.03)
+parser.add_argument("--lr", type=float, default=0.01)
 parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
-parser.add_argument("--algo", type=str, default="fedprox")
+parser.add_argument("--algo", type=str, default="fedavg")
 parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
-parser.add_argument("--interval", dest="interval", type=int, default=1)
+parser.add_argument("--interval", dest="interval", type=int, default=5)
 args = parser.parse_args()
 
 main(args=args)

@@ -31,7 +31,7 @@ for version in ["lin_20_avg_t_mnist", "lin_20_avg_t_cifar10_sgd"]:
         all_mi = {}
         all_mi_min = {}
         all_mi_max = {}
-        for iRound in [1, 5, 10]:
+        for iRound in [1, 5, 10, 20, 30]:
             mi = []
             for k in range(5):
                 res = []
@@ -55,7 +55,7 @@ for version in ["lin_20_avg_t_mnist", "lin_20_avg_t_cifar10_sgd"]:
         print(all_mi)
 
         ax.plot(list(all_mi.keys()), list(all_mi.values()), "*-")
-        ax.fill_between([1, 5, 10], list(all_mi_min.values()), list(all_mi_max.values()), alpha=.1)
+        ax.fill_between([1, 5, 10, 20, 30], list(all_mi_min.values()), list(all_mi_max.values()), alpha=.1)
 ax.set_xlabel("Training round T", fontsize=FONTSIZE)
 ax.grid(True)
 if use_norm == "low":
