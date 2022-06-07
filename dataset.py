@@ -1,6 +1,7 @@
 from pickle import TRUE
 import torch
 from torch.utils.data import Dataset, DataLoader
+import torchvision
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 import numpy as np
@@ -190,7 +191,7 @@ def get_femnist_worker(dir_files, root_dir = "./leaf/data/femnist/data/train"):
 
 def get_femnist(batch_size=32, logger=None):
     root_dir_train = "./leaf/data/femnist/data/train"
-    dir_files = os.listdir(root_dir_train)
+    dir_files = [os.listdir(root_dir_train)[0]]
     num_files  = len(dir_files)
 
     ret = ray.get([

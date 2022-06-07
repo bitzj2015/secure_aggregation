@@ -10,14 +10,15 @@ model = "cnn"
 version = "bs"
 tag = "_new_cifar10"
 
-model = "fcnn"
-version = "bs"
-tag = "_may_mnist_fedprox"
+model = "linear"
+version = "eps"
+tag = "_may_mnist_fedavg"
 FONTSIZE = 24
 root = "./results/fedprox"
 
-entropy = 1403 * 1000 # 25088 
+# entropy = 1403 * 1000 # 25088 
 entropy = 567 * 1200 # 1924
+# entropy = 678 * 176
 
 z_conf = {"80": 1.28, "90": 1.645, "95": 1.96, "98": 2.33, "99": 2.58}
 conf = "95"
@@ -33,16 +34,15 @@ for use_norm in ["high", "low"]:
     ax.xaxis.set_major_locator(plt.MaxNLocator(6))
     ax.tick_params(axis='x', labelsize=FONTSIZE)
     ax.tick_params(axis='y', labelsize=FONTSIZE)
-    for bs in [16, 32, 64, 128, 256]:
+    for bs in [1, 5, 10, 50, 100, 10000000000000]:
         res = [{} for _ in range(3)]
         for num_user in user_list:
-            # if bs == 32:
-            #     with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_avg{tag}.json", "r") as json_file:
+            # if bs == -1:
+            #     with open(f"./results/lin/loss_{num_user}_lin_{num_user}_avg.json", "r") as json_file:
             #         data = json.load(json_file)
             # else:
             with open(f"{root}/{model}/loss_{num_user}_{model}_{num_user}_{version}_{bs}{tag}.json", "r") as json_file:
                 data = json.load(json_file)
-            
             avg_max_MI_by_round = []
             avg_max_MI_by_round_low = []
             avg_max_MI_by_round_high = []
@@ -50,17 +50,22 @@ for use_norm in ["high", "low"]:
             for round in range(30):
                 max_MI_by_round = []
                 try:
-                    for niter in range(5):
+                    for niter in range(10):
                         MI = []
                         for item in data[str(round)][str(niter)]:
-                            if item[1] != float('inf'):
-                                if math.isnan(item[1]) == False:
+                            if math.isnan(item[1]) == False:
+                                if item[1] != float('inf'):
                                     MI.append(item[1])
+
+                        if len(MI) == 0:
+                            continue
                         max_MI = np.mean(sorted(MI)[-10:])
                         max_MI_by_round.append(max_MI)
                 except:
                     continue
-                # print(len(max_MI_by_round))
+                if len(max_MI_by_round) == 0:
+                    continue
+                max_MI_by_round = sorted(max_MI_by_round)[0:3]
                 if use_norm == "low":
                     avg_max_MI_by_round.append(np.mean(max_MI_by_round) / entropy * 100)
                     # avg_max_MI_by_round_low.append(sorted(max_MI_by_round)[0] / entropy * 100)
@@ -83,15 +88,18 @@ for use_norm in ["high", "low"]:
 
         ax.plot(list(res[0].keys()), list(res[0].values()), "*-")
         ax.fill_between(user_list, list(res[1].values()), list(res[2].values()), alpha=.1)
+
     ax.set_xlabel("Number of users", fontsize=FONTSIZE)
-    ax.legend(["B=16", "B=32", "B=64", "B=128", "B=256"], fontsize=FONTSIZE)
+
+    # ax.legend(["B=16", "B=32", "B=64", "B=128", "B=256"], fontsize=FONTSIZE)
+    ax.legend(["$\epsilon$=1", "$\epsilon$=5", "$\epsilon$=10", "$\epsilon$=50", "$\epsilon$=100", "$\epsilon=\infty$"], fontsize=FONTSIZE)
     ax.grid(True)
     if use_norm == "low":
         ax.set_ylabel("Normalized MI (%)", fontsize=FONTSIZE)
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     elif use_norm == "high":
         ax.set_ylabel("Unnormalized MI (bits)", fontsize=FONTSIZE)
-    fig.savefig(f"{root}/{fig_location}/results_cmp_bs_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
+    fig.savefig(f"{root}/{fig_location}/results_cmp_ep_{version}_{use_norm}_avg{tag}.jpg", bbox_inches='tight')
 
 # for use_norm in ["low", "high"]:
 #     fig, ax = plt.subplots()

@@ -12,6 +12,7 @@ from dataset import *
 import ray
 import logging
 import subprocess
+import math
 from copy import deepcopy
 torch.manual_seed(0)
 
@@ -42,6 +43,11 @@ def main(args):
     device = torch.device("cuda" if use_cuda else "cpu")
 
 
+    EPSILON = args.eps
+    DELTA = 1 / 1200
+    SIGMA = math.sqrt(2*math.log(1.25/DELTA)) / EPSILON
+
+
     nClients = args.total_nodes
     batch_size = args.batch_size
     trainTotalRounds = args.trainTotalRounds
@@ -61,17 +67,19 @@ def main(args):
 
     dataloaderByClient, testdataloader = get_dataset(args.dataset, batch_size, nClients, logger, sampling=args.sampling, alpha=args.alpha)
     
-    if args.gpu_pw > 0:
+    if args.gpu_pw > 0 and NUM_GPUS > 0:
         ray.init(num_gpus=NUM_GPUS) #, device=device
         constant.gpu_per_worker = NUM_GPUS / len(clientSubSet)
         constant.cpu_per_worker = 0
+        worker_device = device
     else:
         ray.init(num_cpus=os.cpu_count()) #, device=device
         constant.gpu_per_worker = 0
         constant.cpu_per_worker = int(os.cpu_count() / len(clientSubSet))
+        worker_device = torch.device("cpu")
     from worker import Worker
 
-    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=device, algo=args.algo) for i in range(len(clientSubSet))]
+    workerByClient = [Worker.remote(dataloaderByClient[clientSubSet[i]], lr=args.lr, model_name=args.model, dataset_name=args.dataset, device=worker_device, algo=args.algo) for i in range(len(clientSubSet))]
     global_model_param = ray.get(workerByClient[0].get_local_model_param.remote())
     grad_dim = ray.get(workerByClient[0].get_grad_dim.remote())
     mine_results = {}
@@ -116,8 +124,12 @@ def main(args):
                     cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
                     grad_aggregate_concatenated += torch.flatten(torch.mean(cur_param, axis=0)).tolist()
 
+                grad_aggregate_concatenated = torch.from_numpy(np.array(grad_aggregate_concatenated))
+                accum_norm = torch.norm(grad_aggregate_concatenated, p=2)
+                accum_norm = max(1, accum_norm)
+                grad_aggregate_concatenated = grad_aggregate_concatenated / accum_norm + torch.normal(mean=torch.zeros_like(grad_aggregate_concatenated), std=SIGMA)
                 sample_individual_grad_concatenated.append(individual_grad_concatenated)
-                sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated)
+                sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated.tolist())
 
             # Train MINE network
             X = np.array(sample_individual_grad_concatenated)
@@ -158,9 +170,17 @@ def main(args):
             local_model_updates += deepcopy(tmp_local_model_updates)    
 
         # Update the global model
+        global_update = {}
+        accum_norm = 0
         for name in global_model_param.keys():
             cur_param = torch.cat([item[name].unsqueeze(0) for item in local_model_updates], axis=0)
-            global_model_param[name] += torch.mean(cur_param, axis=0)
+            global_update[name] = torch.mean(cur_param, axis=0)
+            accum_norm += (global_update[name] * global_update[name]).sum()
+        accum_norm = torch.sqrt(accum_norm)
+        accum_norm = max(1, accum_norm)
+
+        for name in global_model_param.keys():
+            global_model_param[name] += (global_update[name] / accum_norm + torch.normal(mean=torch.zeros_like(global_update[name]), std=SIGMA))
             # print(global_model_param[name])
 
     # torch.save(mine_net, f"./param/mine_{subset}_{args.version}.bin")
@@ -182,9 +202,10 @@ parser.add_argument("--k", type=int, default=10)
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
-parser.add_argument("--algo", type=str, default="fedprox")
+parser.add_argument("--algo", type=str, default="fedavg")
 parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
-parser.add_argument("--interval", dest="interval", type=int, default=1)
+parser.add_argument("--interval", dest="interval", type=int, default=5)
+parser.add_argument("--eps", dest="eps", type=int, default=1)
 args = parser.parse_args()
 
 main(args=args)
