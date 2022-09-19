@@ -102,6 +102,7 @@ def main(args):
             local_model_updates = []
             for m in tqdm(range(num_samples)):
                 local_model_updates = []
+                print(num_jobs)
                 for _ in range(num_jobs):
                     # Get the global model
                     # ray.get([worker.pull_global_model.remote(global_model_param) for worker in workerByClient])
@@ -126,8 +127,9 @@ def main(args):
 
                 grad_aggregate_concatenated = torch.from_numpy(np.array(grad_aggregate_concatenated))
                 accum_norm = torch.norm(grad_aggregate_concatenated, p=2)
-                accum_norm = max(1, accum_norm)
-                grad_aggregate_concatenated = grad_aggregate_concatenated / accum_norm + torch.normal(mean=torch.zeros_like(grad_aggregate_concatenated), std=SIGMA)
+                accum_norm = max(1, accum_norm/2)
+
+                grad_aggregate_concatenated = grad_aggregate_concatenated / accum_norm + torch.normal(mean=torch.zeros_like(grad_aggregate_concatenated), std=2*SIGMA)
                 sample_individual_grad_concatenated.append(individual_grad_concatenated)
                 sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated.tolist())
 
@@ -198,7 +200,7 @@ parser.add_argument("--nEpochs", type=int, default=1)
 parser.add_argument("--version", type=str, default="test")
 parser.add_argument("--model", type=str, default="linear")
 parser.add_argument("--dataset", type=str, default="mnist")
-parser.add_argument("--k", type=int, default=10)
+parser.add_argument("--k", type=int, default=5)
 parser.add_argument("--lr", type=float, default=0.03)
 parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")

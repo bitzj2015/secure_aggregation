@@ -8,6 +8,7 @@ import numpy as np
 from skimage.measure.entropy import shannon_entropy
 import os, json
 import ray
+import matplotlib.pyplot as plt
 
 class TaskDataset(Dataset):
     def __init__(self, input, label, client_id=-1):
@@ -155,9 +156,12 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
         for label in dataset_by_class.keys():
             # dirichlet
             proportions.append(np.random.dirichlet(np.repeat(alpha, nClients)))
+        
+        plt.figure()
         for iClient in range(nClients):
             train_x = []
             train_y = []
+            stat = {}
             for label in range(len(proportions)):
                 proportion = proportions[label]
                 label_list_len = len(dataset_by_class[label])
@@ -166,7 +170,15 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
                 for id in range(num_index):
                     train_x.append(dataset_by_class[label][id + start_index])
                     train_y.append(label)
-
+                    if label not in stat.keys():
+                        stat[label] = 0
+                    stat[label] += 1
+            if iClient < 10:
+                
+                print(train_y)
+                print(stat)
+                plt.plot(stat.values())
+            
             train_dataset = TaskDataset(
                 torch.from_numpy(np.array(train_x)), 
                 torch.from_numpy(np.array(train_y)),
@@ -174,6 +186,7 @@ def get_dataset(dataset_name, batch_size, nClients, logger, sampling="iid", alph
             )
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             dataloaderByClient.append(train_loader)
+        plt.savefig(f"test_{alpha}.jpg")
     test_dataset = TaskDataset(xtest, ytest)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 

@@ -134,6 +134,7 @@ def main(args):
 
                     sample_individual_grad_concatenated.append(individual_grad_concatenated)
                     sample_grad_aggregate_concatenated.append(grad_aggregate_concatenated)
+                    print(len(individual_grad_concatenated))
 
                     # Update the global model
                     for name in global_model_param.keys():
@@ -143,15 +144,15 @@ def main(args):
                 all_sample_individual_grad_concatenated.append(deepcopy(sample_individual_grad_concatenated))
                 all_sample_grad_aggregate_concatenated.append(deepcopy(sample_grad_aggregate_concatenated))
 
-            X = np.array(xdata)
-            Y1 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_individual_grad_concatenated])
-            Y2 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_grad_aggregate_concatenated])
+            # X = np.array(xdata)
+            # Y1 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_individual_grad_concatenated])
+            # Y2 = np.array([np.array(grad[:trainTotalRounds]).reshape(-1) for grad in all_sample_grad_aggregate_concatenated])
 
-            hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}_{args.algo}.hdf5", "w")
-            hf.create_dataset('xdata', data=X)
-            hf.create_dataset('ygrad1', data=Y1)
-            hf.create_dataset('ygrad2', data=Y2)
-            hf.close()
+            # hf = h5py.File(f"./dataset/grad_data_{args.model}_{subset}_{k}_{args.dataset}_bs_{batch_size}_{args.version}_{args.algo}.hdf5", "w")
+            # hf.create_dataset('xdata', data=X)
+            # hf.create_dataset('ygrad1', data=Y1)
+            # hf.create_dataset('ygrad2', data=Y2)
+            # hf.close()
     else:
         mine_results = {}
         for k in range(5):
@@ -162,7 +163,7 @@ def main(args):
             print(X.shape, len(Y_all[0]))
             grad_dim = len(Y_all[0]) // 30
 
-            for iRound in [1, 5, 10, 20, 30]:
+            for iRound in range(30):
                 mine_results[k][iRound] = []
                 Y = np.array([np.array(grad[:iRound * grad_dim]).reshape(-1) for grad in Y_all]) * 1000
                 joint = torch.from_numpy(np.concatenate([X, Y], axis=1).astype("float32"))
@@ -188,7 +189,7 @@ def main(args):
                         logger.info(f"MINE iter: {niter}, MI estimation: {mi_lb_sum / (i+1)}")
                     mine_results[k][iRound].append((niter, mi_lb.item()))
 
-        with open(f"./results/loss_{subset}_{args.version}.json", "w") as json_file:
+        with open(f"./results/loss_{subset}_{args.version}_{args.algo}.json", "w") as json_file:
             json.dump(mine_results, json_file)
         
 parser = argparse.ArgumentParser()
