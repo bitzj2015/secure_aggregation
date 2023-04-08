@@ -224,7 +224,7 @@ def get_femnist(batch_size=32, logger=None):
                 client_id = count
             )
             count += 1
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             dataloaderByClient.append(train_loader)
 
     root_dir_test = "./leaf/data/femnist/data/test"

@@ -208,7 +208,7 @@ parser.add_argument("--alpha", type=float, default=1)
 parser.add_argument("--sampling", type=str, default="iid")
 parser.add_argument("--algo", type=str, default="fedavg")
 parser.add_argument("--gpu-pw", dest="gpu_pw", type=float, default=0)
-parser.add_argument("--interval", dest="interval", type=int, default=5)
+parser.add_argument("--interval", dest="interval", type=int, default=1)
 args = parser.parse_args()
 
 main(args=args)

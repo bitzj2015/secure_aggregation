@@ -35,7 +35,7 @@ def main(args):
 
     # Define hyperparameters
     use_cuda = False
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and False:
         use_cuda = True
         NUM_GPUS = 1
     else:
