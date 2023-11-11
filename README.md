@@ -1,5 +1,5 @@
-# secure_aggregation
-Artifacts for paper: How Much Privacy Does Federated Learning with Secure Aggregation Guarantee? PETS, 2023.[arxiv](https://arxiv.org/abs/2208.02304)
+# Measure the privacy leakage in federated learning with secure aggregation
+Ahmed Roushdy Elkordy, Jiang Zhang, Yahya H. Ezzeldin, Konstantinos Psounis, Salman Avestimehr. How Much Privacy Does Federated Learning with Secure Aggregation Guarantee? PETS, 2023 ([Download paper](https://arxiv.org/abs/2208.02304)).
 
 
 
