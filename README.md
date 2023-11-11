@@ -1,5 +1,7 @@
 # secure_aggregation
-Measure mutual information of target user's gradient and the aggregated gradient
+Artifacts for paper: How Much Privacy Does Federated Learning with Secure Aggregation Guarantee? PETS, 2023.![arxiv](https://arxiv.org/abs/2208.02304)
+
+
 
 ## Usage of MINE
 ```
