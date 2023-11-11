@@ -1,5 +1,5 @@
 # secure_aggregation
-Artifacts for paper: How Much Privacy Does Federated Learning with Secure Aggregation Guarantee? PETS, 2023.![arxiv](https://arxiv.org/abs/2208.02304)
+Artifacts for paper: How Much Privacy Does Federated Learning with Secure Aggregation Guarantee? PETS, 2023.[arxiv](https://arxiv.org/abs/2208.02304)
 
 
 
